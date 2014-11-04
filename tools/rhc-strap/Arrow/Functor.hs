@@ -26,6 +26,7 @@ import qualified Data.List as List
 class Functor f a where
     map         :: a i o -> a (f i) (f o)
 
+-- this is Unzip!
 class Applicative f a where
     app     :: f (a i o) -> a (f i) (f o)
 
@@ -86,28 +87,43 @@ instance Zip (->) ((,) s) where
 
 ------ Unzip
 
-class Unzip g f where
-    unzip  :: f (g x y) -> g (f x) (f y)
 
+-----
 
-instance Unzip (,) [] where
+-- Unzip over (->) is also Applicative
+
+class Unzip f a where
+    unzip :: f (a i o) -> a (f i) (f o)
+
+instance Unzip (Either e) (->) where
+    unzip (Right f) = \x -> case x of
+        Right x -> Right $ f x
+        Left x  -> Left x
+    unzip (Left e) = \x -> case x of
+        Right x -> Left e
+        Left x  -> Left x
+
+instance Unzip ((,) s) (->) where
+    unzip (_,f) = \(s,x) -> (s,f x)
+
+instance Unzip [] (,) where
     unzip = List.unzip
 
-instance Unzip (->) [] where
+instance Unzip [] (->) where
     unzip fs = List.zipWith ($) fs
 
-instance Unzip (,) Maybe where
+instance Unzip Maybe (,) where
     unzip (Just (x,y)) = (Just x, Just y)
     unzip Nothing      = (Nothing, Nothing)
 
 -- All applicative functors 'f' are instances of 'Unzip (->) f'
-instance Monoid s => Unzip (->) ((,) s) where
-    unzip (u,f) = \(v,x) -> (u `mappend` v, f x)
+--instance Monoid s => Unzip ((,) s) (->) where
+--    unzip (u,f) = \(v,x) -> (u `mappend` v, f x)
 
 ----- Flip
 
-class Flip g f where
-    flip :: f (g a b) (g c d) -> g (f a c) (f b d)
+class Swap2 g f where
+    swap2 :: f (g a b) (g c d) -> g (f a c) (f b d)
 
 -- instances of
 --  Flip a (,)          ==> first, second
@@ -116,11 +132,29 @@ class Flip g f where
 --  Extract a Either    ==> fanin
 -- are Arrows
 
-instance Flip (->) (,) where
-    flip (f,g) = \(x,y) -> (f x,g y)
+instance Swap2 (->) (,) where
+    swap2 (f,g) = \(x,y) -> (f x,g y)
+
+class Swap3 g f where
+    swap3 :: f (g a1 a2 a3) (g b1 b2 b3) (g c1 c2 c3)
+          -> g (f a1 b1 c1) (f a2 b2 c2) (f a3 b3 c3)
+-- instance Swap3, anyone, anyone?
+
+
+class RhArrow f where
+    lift :: RhArrow g => g a b -> f a b
+    (**) :: f a b -> f c d -> f (a,c) (b,d)
+
+class RhArrowChoice a where
+    +> :: a i (Maybe o) -> a i o -> a i o
+
+instance RhArrowChoice (->) where
+    f +> g = \x -> case f x of
+        Just y  -> y
+        Nothing -> g x
 
 -- this will NOT typecheck in Haskell, requires dependent types
---  specifically, 
+{-
 instance Flip (->) Either where
     flip :: Either (a -> a) (b -> c) -> (Either a b -> Either a c)
     flip (Right f) = \x -> case x of
@@ -130,9 +164,6 @@ instance Flip (->) Either where
         Right x -> Right x
         Left x  -> Left $ f x
 
-instance Flip Either (->) where
-    flip 
-
 instance Unzip (->) (Either a) where
     unzip (Right f) = \x -> case x of
         Right x  -> Right $ f x
@@ -141,7 +172,7 @@ instance Unzip (->) (Either a) where
 
 instance Arrow a => Flip (,) a where
     flip (f,g) = f *** g
-
+-}
 {-
 instance Arrow a => Flip a (,) where
     flip (f *** g) = (f,g)
@@ -168,6 +199,7 @@ instance Category a
     id          = FunctorArrow $ id
     g . f       = FunctorArrow $ runFunctor g . runFunctor f
 
+{-
 instance (Arrow a, Functor f (->), Zip (,) f, Unzip (,) f)
     => Arrow (FunctorArrow f a)
     where
@@ -176,7 +208,7 @@ instance (Arrow a, Functor f (->), Zip (,) f, Unzip (,) f)
     second f    = FunctorArrow $ arr unzip >>> (second $ runFunctor f) >>> arr zip
     f *** g     = FunctorArrow $
         arr unzip >>> (runFunctor f *** runFunctor g) >>> arr zip
-
+-}
 {-
 instance (Arrow a, ArrowChoice a, Functor f (->), Zip Either f, Unzip Either f)
     => ArrowChoice (FunctorArrow f a)

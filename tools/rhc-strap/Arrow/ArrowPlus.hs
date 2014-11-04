@@ -27,6 +27,7 @@ class ArrowZero a where
 class ArrowPlus a where
     (<+>)       :: a b c -> a b c -> a b c
 
+-- The following may better be expressed as _loops_
 
 many :: (Category a, ArrowPlus a) => a i i -> a i i
 many f =

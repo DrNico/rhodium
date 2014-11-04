@@ -1,9 +1,12 @@
 
 module Util.Parser.Lexer (
         Lexer, LexerArrow(..),
-        alpha, digit, space, lower, upper, alphaNum, char, satisfy
+        alpha, digit, space, lower, upper, alphaNum, char, newline,
+        satisfy, string
     )
 where
+
+import Prelude ( ($), Bool(..), (||), Char, Eq(..), Maybe(..) )
 
 import Arrow.ArrowPlus
 import Arrow.Parser
@@ -12,12 +15,11 @@ import Util.Parser.TextPos
 import Control.Arrow ( Arrow(..) )
 import Control.Arrow.Transformer.State ( StateArrow(..) )
 import Control.Category
-import Data.ByteString ( ByteString, isPrefixOf, drop )
+import Data.ByteString ( ByteString, isPrefixOf, drop, length )
 import qualified Data.ByteString.UTF8   as UTF
 import Data.Char
     ( isSpace, isUpper, isLower, isAlphaNum, isAlpha, isDigit, isHexDigit )
 import Data.Monoid ( Monoid(..) )
-import Prelude ( ($), Bool, Char, Eq(..), Maybe(..) )
 
 
 type Lexer = LexerArrow () ()
@@ -62,7 +64,7 @@ char :: Char -> Lexer
 char c = satisfy ((==) c)
 
 newline :: Lexer
-
+newline = satisfy $ \c -> (c == '\n') || (c == '\r') -- TODO: \r\n
 
 satisfy :: (Char -> Bool) -> Lexer
 satisfy test =
@@ -82,7 +84,7 @@ string s =
                     True ->
                         (OkSkip pos,str)
                     False ->
-                        (OkConsumed pos `mappend` stringPos s, drop len str)
+                        (OkConsumed $ pos `mappend` stringPos s, drop len str)
             False ->
                 (FailSkip $ UTF.fromString "", str)
 
@@ -90,7 +92,7 @@ string s =
 stringPos :: ByteString -> TextPos
 stringPos s = go s mempty
     where
-    go s pos = case uncons s of
+    go s pos = case UTF.uncons s of
         Nothing     ->  pos
         Just (c,s') ->
             go s' (pos `mappend` charPos c)

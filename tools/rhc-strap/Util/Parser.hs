@@ -1,113 +1,83 @@
 {-# LANGUAGE
-    Arrows,
-    MultiParamTypeClasses, FlexibleInstances, UndecidableInstances,
+    GADTs,
     GeneralizedNewtypeDeriving
   #-}
 
-module Util.Parser
-    ( Parser, Lexer, parse, lex )
-where
+module Util.Parser where
 
-import Prelude (
-    ($), ($!), Bool(..), Char, Int, String, Eq(..), Maybe(..), Either(..), Show, fromInteger,
-    not, elem, (>), (+), (-), error, const, uncurry, undefined )
+import Prelude hiding (id,(.), length)
 
--- Our Arrows
--- import Arrow.Arrow
-import Arrow.ArrowPlus
-import Arrow.Foldable
-import Arrow.Functor
-import Arrow.Monad
-import Arrow.Parser
-
-import Util.Parser.Lexer
-import Util.Parser.TextPos
-
-import Control.Arrow ( Arrow(..), ArrowChoice(..), returnA )
-import Control.Arrow.Operations ( ArrowState(..) )
-import Control.Arrow.Transformer
+import Control.Arrow
+import Control.Arrow.Operations
 import Control.Arrow.Transformer.State
 import Control.Category
+import Data.ByteString ( ByteString, length )
+import qualified Data.ByteString.UTF8 as UTF
+import Data.Char
 import Data.Monoid
 
-import Data.ByteString.Internal ( ByteString(..) )
-import Data.ByteString.Short    ( ShortByteString, toShort, empty )
+import Arrow.Lexer
+import Arrow.Parser
+import Util.Parser.TextPos
+
+newtype Parser r i o = Parser {
+        theParser :: ParserArrow r ParseError LexerArrow i o
+    } deriving (Category, Arrow, ArrowChoice, ArrowZero, ArrowPlus)
+
+type Lexer = LexerArrow () ()
+type ParseError = String
+
+data PResult a where
+    PDone   :: a -> PResult a
+    PFail   :: ParseError -> PResult a
+    PMore   :: (b,ByteString) -> (b -> LResult a)
+            -> PResult a
 
 
-type ParseError = ByteString
-
-parse :: ArrowChoice a => Parser a () r -> a ByteString (Either ParseError r)
-parse (Parser p) = proc str -> do
-    (res,_) <- (runState $ runParser p) -< ((),ParseState str mempty)
-    case res of
-        OkConsumed r        -> returnA -< Right r
-        OkSkip r            -> returnA -< Right r
-        FailConsumed e      -> returnA -< Left e
-        FailSkip e          -> returnA -< Left e
-
--- lift a simple lexer into the parsing arrow
-lex :: ArrowChoice a => Lexer -> Parser a () ShortByteString
-lex (Lexer lexer) = proc _ -> do
-    str <- fetchStr -< ()
-    let (res,str') = (runState $ runParser lexer) (mempty,str)
-    case res of
-        OkConsumed r     -> do
-            loc <- fetchLoc -< ()
-            storeLoc -< loc `mappend` r
-            let PS pload offset  len = str
-            let PS _     offset' len' = str'
-            storeStr -< str'
-            okConsumed -< toShort $ PS pload offset (len - len')
-        OkSkip r        -> do
-            okSkip -< empty
-        FailConsumed e      ->
-            failConsumed -< e
-        FailSkip e          ->
-            failSkip -< e
+parse :: Parser r () r  -> ByteString -> LResult r
+parse (Parser p) input =
+    fmap fst $ runKleisli 
+        (runState $ runLexer $ runParser p ParserPlate {
+                failConsumed    = raise,
+                okSkip          = id,
+                failSkip        = raise,
+                okConsumed      = id
+        })
+        ((),input)
 
 
------
+-- | Feed additional input to a partial result.
+feed :: ByteString -> LResult r -> LResult r
+feed input (LMore f) =
+    f input
+feed _ res = res
+
+-- | Insert the given lexer, capturing whatever it matches.
+-- lex   :: LexerArrow () () -> Parser () ByteString
+-- lex theLexer =
+
+
+-- | Insert the given lexer, ignore the matched sub-string.
+
+lex_ :: Lexer -> Parser r () ()
+lex_ theLexer = Parser $ ParserArrow $ \plate ->
+        LexerArrow $ StateArrow $ Kleisli $ cont plate
+    where
+    cont :: ParserPlate String LexerArrow () r
+         -> ((),ByteString)
+         -> LResult (r,ByteString)
+    cont plate = \(_,s) -> cases plate s $ lexer theLexer ((),s)
+
+    cases plate s res = case res of
+        LDone r@(_,s') ->
+            if length s == length s'  -- change to internal offset comparison
+            then lexer (okSkip plate) r
+            else lexer (okConsumed plate) r
+        LFail e ->
+            lexer (failSkip plate) (e,s)
+        LMore f ->
+            LMore $ \input -> cases plate s $ f input
+            
+    
 -- Internals
------
-
-newtype Parser a i o = Parser {
-        theParser :: ParserArrow ParseError (StateArrow ParseState a) i o
-    }
-    deriving (Category, Arrow, ArrowChoice, ArrowState ParseState)
-
-data ParseState = ParseState {
-        stream      :: ByteString,
-        location    :: TextPos
-    }
-
--- these are useful internally in lieu of returnA
-okSkip          :: Arrow a => Parser a r r
-okConsumed      :: Arrow a => Parser a r r
-failSkip        :: Arrow a => Parser a ParseError r
-failConsumed    :: Arrow a => Parser a ParseError r
-
-okSkip          = Parser $ ParserArrow $ arr OkSkip
-okConsumed      = Parser $ ParserArrow $ arr OkConsumed
-failSkip        = Parser $ ParserArrow $ arr FailSkip
-failConsumed    = Parser $ ParserArrow $ arr FailConsumed
-
--- parse state modifiers
-fetchStr        :: ArrowChoice a => Parser a () ByteString
-storeStr        :: ArrowChoice a => Parser a ByteString ()
-fetchLoc        :: ArrowChoice a => Parser a () TextPos
-storeLoc        :: ArrowChoice a => Parser a TextPos ()
-
-fetchStr = proc _ -> do
-    st <- fetch -< ()
-    returnA -< stream st
-storeStr = proc str -> do
-    st <- fetch -< ()
-    store -< st { stream = str }
-
-fetchLoc = proc _ -> do
-    st <- fetch -< ()
-    returnA -< location st
-storeLoc = proc loc -> do
-    st <- fetch -< ()
-    store -< st { location = loc }
-
+type Plate = ParserPlate String 

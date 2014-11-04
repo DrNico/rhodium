@@ -1,0 +1,53 @@
+even {
+    Z >- even -> True
+    S(x) >- even -> r :=
+    [ x >- odd -> r ]
+}
+odd {
+    Z >- odd -> False
+    S(x) >- odd -> r :=
+    [ x >- even -> r ]
+}
+plus {
+  Z y >- plus -> y
+  S(x) y >- plus -> S(r) :=
+  [ x y >- plus -> r ]
+}
+equals {
+  Z Z >- equals -> True
+  Z S(x) >- equals -> False
+  S(x) Z >- equals -> False
+  S(x) S(y) >- equals -> r :=
+  [ x y >- equals -> r ]
+}
+unit {
+  x >- unit -> Cons(x Nil)
+}
+join {
+  Nil >- join -> Nil
+  Cons(x xs) >- join -> r :=
+  [ xs >- join -> y
+    x y >- append -> r
+  ]
+}
+append {
+  Nil ys >- append -> ys
+  Cons(x1 xs1) ys >- append -> Cons(x1 r) :=
+  [ xs1 ys >- append -> r ]
+}
+zip {
+  Nil ys >- zip -> Nil
+  xs Nil >- zip -> Nil
+  Cons(x xs) Cons(y ys) >- zip -> Cons(P(x y) rest) :=
+  [ xs ys >- zip -> rest ]
+}
+map {
+  f Nil >- map -> Nil
+  f Cons(x xs) >- map -> Cons(y ys) :=
+  [  x >- f -> y
+     f xs >- map -> ys
+  ]
+}
+id1 {
+    x >- id1 -> x
+}
