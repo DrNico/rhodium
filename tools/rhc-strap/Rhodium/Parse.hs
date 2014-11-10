@@ -8,12 +8,12 @@ where
 
 import Prelude (($), const)
 
-import Arrow.ArrowPlus
+-- import Arrow.ArrowPlus
 import Rhodium.Types
-import Util.Parser ( Parser, Lexer, parse, lex )
-import Util.Parser.Lexer
+import Util.Parser
+-- import Util.Parser.Lexer
 
-import Control.Arrow ( Arrow(..), returnA )
+import Control.Arrow
 import Control.Category
 import Data.ByteString ( ByteString )
 import Data.Monoid
@@ -28,21 +28,22 @@ import Data.Monoid
     atom        ::= upper alphanum*
 -}
 
-type Prod = Parser (->) ()
-type Terminal = Parser (->) ()
+type Prod       = Parser * (->) ()
+type Terminal   = Parser * (->) () ByteString
+type Separator  = Parser * (->) () ()
 
 morphism :: Prod Morphism
 morphism = proc () -> do
     ins <- pattern `sepBy` somews -< ()
     manyws -< ()
     fname <- (( proc () -> do
-        lex $ string ">->" -< ()
+        lex_ $ string ">->" -< ()
         returnA -< "@" )
       <+> ( proc () -> do
-        (lex $ string ">-") -< ()
+        lex_ $ string ">-" -< ()
         manyws -< ()
         fname <- ident <+> (lex $ string "@") -< ()
-        (lex $ string "->") <<< manyws -< ()
+        (lex_ $ string "->") <<< manyws -< ()
         returnA -< fname
         )) -< ()
     manyws -< ()
@@ -57,53 +58,33 @@ pattern = proc () ->
         )
     <+> ( do
         ctr <- atom -< ()
-        args <- option [] ( proc () -> do
-            lex $ char '(' -< ()
+        args <- option ( proc () -> do
+            lex_ $ char '(' -< ()
             args <- pattern `sepBy` somews -< ()
-            lex $ char ')' -< ()
-            returnA -< args ) -< ()
+            lex_ $ char ')' -< ()
+            returnA -< args ) -< []
         returnA -< Pat ctr args
         )
 
 
-ident :: Terminal Name
+ident :: Terminal
 ident =
     lex $ lower >>> many alphaNum
 
-atom :: Terminal Name
+atom :: Terminal
 atom =
     lex $ upper >>> many alphaNum
 
 -- TODO: handle tabs in horizontal whitespace
-manyws :: Terminal () 
-manyws = proc () -> do
-    lex $ many $ char ' ' -< ()
-    returnA -< ()
+manyws :: Separator
+manyws =
+    lex_ $ many $ char ' '
 
-somews :: Terminal ()
-somews = proc () -> do
-    lex $ some $ char ' ' -< ()
-    returnA -< ()
+somews :: Separator
+somews =
+    lex_ $ some $ char ' '
 
-manyvs :: Terminal ()
-manyvs = proc () -> do
-    lex $ many $ char ' ' <+> char '\n' <+> char '\r' -< ()
-    returnA -< ()
+manyvs :: Separator
+manyvs =
+    lex_ $ many $ char ' ' <+> char '\n' <+> char '\r'
 
--- Parser capabilities
-
-sepBy :: (Arrow a, ArrowPlus a) => a () o -> a () e -> a () [o]
-sepBy pat sep =
-        (many g <<< (arr $ \x -> [x]) <<< pat)
-    <+>
-        (arr $ const [])
-    where
-    g = proc x -> do
-        sep -< ()
-        y <- pat -< ()
-        returnA -< x `mappend` [y]
-        -- ## this last one is yucky; needs to be turned into a tail call
-
-option :: (Arrow a, ArrowPlus a) => o -> a () o -> a () o
-option def try =
-    try <+> (arr $ const def)

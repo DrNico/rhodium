@@ -33,18 +33,19 @@ newtype LexerArrow i o = LexerArrow {
                  -- (i, BS) -> LResult (o, BS)
     } deriving (Category, Arrow, ArrowChoice, ArrowApply, ArrowZero, ArrowPlus)
 
+
+-- | Lexing results either in
+--    * success with input of lexer copied in output
+--    * failure with a short error string
 data LResult a where
     LDone   :: a -> LResult a
     LFail   :: String -> LResult a
-    LMore   :: (ByteString -> LResult a) -> LResult a
 
 instance Show a => Show (LResult a) where
     showsPrec p (LDone x)   =
         showParen (p >= 10) (showString "LDone " . showsPrec 11 x)
     showsPrec p (LFail e)   =
         showParen (p >= 10) (showString "LFail " . showsPrec 11 e)
-    showsPrec p (LMore _)   =
-        showParen (p >= 10) (showString "LMore <...>")
 
 lexer :: LexerArrow i o -> (i,ByteString) -> LResult (o,ByteString)
 lexer lex =
@@ -85,18 +86,16 @@ satisfy test = LexerArrow $ StateArrow $ Kleisli $ cont test
     cont test = \(x,s) ->
         case UTF.uncons s of
             Just (c,s') ->
-                if test c then LDone (x,s') else LFail ""
+                if test c then LDone (x,s') else LFail "satisfy"
             Nothing ->
-                LMore $ \input -> cont test (x,input)
+                LFail "EOF"
 
 takeWhile :: (Char -> Bool) -> LexerArrow i i
 takeWhile test = LexerArrow $ StateArrow $ Kleisli $ cont test
     where
     cont test = \(x,s) ->
         let (_,s') = UTF.span test s
-        in  if null s'
-            then LMore $ \input -> cont test (x,input)
-            else LDone (x,s')
+        in LDone (x,s')
 
 string :: ByteString -> LexerArrow i i
 string str = LexerArrow $ StateArrow $ Kleisli $ cont str
@@ -104,9 +103,7 @@ string str = LexerArrow $ StateArrow $ Kleisli $ cont str
     cont str = \(x,s) ->
         if str `isPrefixOf` s
             then LDone (x, drop (length str) s)
-            else if length s < length str
-                 then LMore $ \input -> cont str (x,input)
-                 else LFail $ "string: " ++ show str
+            else LFail $ "string: " ++ show str
 
 
 -- Instance declarations
@@ -114,12 +111,17 @@ string str = LexerArrow $ StateArrow $ Kleisli $ cont str
 instance ArrowError String LexerArrow where
     raise   = LexerArrow $ StateArrow $ Kleisli $ \(e,_) -> LFail e
     
---    tryInUnless try succ err =
+    tryInUnless try succ err =
+        LexerArrow $ StateArrow $ Kleisli $ \(e,s) ->
+            case (lexer try) (e,s) of
+                LDone (b,s') ->
+                    (lexer succ) ((e,b),s')
+                LFail ex ->
+                    (lexer err) ((e,ex),s)
 
 instance Functor LResult where
     fmap f (LDone a)    = LDone (f a)
     fmap _ (LFail s)    = LFail s
-    fmap f (LMore g)    = LMore (g >=> LDone . f)
 
 instance Applicative LResult where
     pure    = return
@@ -129,7 +131,6 @@ instance Monad LResult where
     return  = LDone
     
     (LDone a)   >>= f     = f a
-    (LMore g)   >>= f     = LMore (g >=> f)
     (LFail s)   >>= _     = LFail s
 
 instance Alternative LResult where
@@ -140,5 +141,4 @@ instance MonadPlus LResult where
     mzero           = LFail "mzero"
     
     (LDone a) `mplus` _   = LDone a
-    (LMore f) `mplus` g   = LMore $ \x -> f x `mplus` g
     (LFail s) `mplus` g   = g
