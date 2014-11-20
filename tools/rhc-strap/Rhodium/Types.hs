@@ -30,7 +30,8 @@ data Pat =
   | PVar Name
   deriving (Show)
 
-type Name = ShortByteString
+type Name = ByteString
+         -- ShortByteString
 
 type Binds   = [(Name,Value)]
 
@@ -46,6 +47,9 @@ class ToDoc a where
 
 instance ToDoc ShortByteString where
     toDoc = text . toString . fromShort
+
+instance ToDoc ByteString where
+    toDoc = text . toString
 
 instance ToDoc Pat where
     toDoc (Pat name pats) =

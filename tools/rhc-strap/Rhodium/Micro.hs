@@ -1,55 +1,61 @@
+{-# LANGUAGE
+    OverloadedStrings
+  #-}
 
 module Rhodium.Micro where
 
+import Prelude hiding ( flip )
+
+import Control.Monad    (mplus)
 import Data.List        (find)
 import Data.Maybe       (fromJust)
 
-data Program = Program [ADef]
-data ADef    = ADef Name [Clause]
-type Clause  = ([Pat], AExpr, [Pat])
-data AExpr   = ACall [Pat] Name [Pat] | AId
-
-data Pat     = Pat Name [Pat] | PVar Name
-type Name    = String
-type Binds   = [(Name,Value)]
-
-type Stack   = [Value]
-data Value   = Value Name [Value] deriving (Show)   -- Pattern without variable
-
+import Rhodium.Types
 
 -- Transform input stack to output stack with given task
 --   imperative style
-run :: Program -> Clause -> (Binds, Stack) -> Maybe (Binds, Stack)
-run prog ([], AId, []) bs =
-    Just bs
-
-run prog (pats, AId, ctrs) (binds,stack) = do
-    -- pull values from the stack, defining local variables in 'pats'
-    (bs,st) <- unifyAll pats stack
-    
-    -- push values on the stack, replacing all variables in 'ctrs'
-    return (binds, map (// (bs ++ binds)) ctrs ++ st)
-
-run prog (pats, ACall ins fname outs, ctrs) (binds,stack) = do
+--   note: 'main' can only have a single clause
+runClause :: Program -> Clause -> (Binds, Stack) -> Maybe (Binds, Stack)
+runClause prog (Clause pats mors ctrs) (binds,stack) = do
     -- pull values from the stack, defining local variables in 'pats'
     (bs1,st1) <- unifyAll pats stack
     
+    -- run the morphisms
+    (bs2,st2) <- chain
+        (map (\m -> runMorphism prog m) mors)
+        (bs1 ++ binds,st1)
+    
+    -- push values on the stack, using local and global bindings
+    let outbinds = bs2 ++ binds
+    return (outbinds, map (// outbinds) ctrs ++ st2)
+
+-- Evaluate a single morphism in the given environment
+runMorphism :: Program -> Morphism -> (Binds, Stack) -> Maybe (Binds, Stack)
+runMorphism prog (Morphism ins fname outs) (binds,stack) = do
+    let Program defs = prog
+    
     -- lookup function name, crash if undefined
-    let ADef _ clauses = aDef prog fname
+    --   resolved name is: 1) local ref to Value; 2) global def
+    clauses <- ( do
+            VFun cs <- lookup fname binds
+            return cs )
+        `mplus` ( do
+            VFun cs <- lookup fname defs
+            return cs )
+        `mplus` (
+            error $ "Arrow lookup failure: " ++ show fname )
     
     -- push values on the stack according to 'ins'
-    let st2 = map (// (bs1 ++ binds)) ins ++ st1
+    let st2 = map (// (binds ++ defs)) ins ++ stack
     
     -- try the function clauses in sequence, use the first match
     -- presenting the stack and bindings
-    (_, st3):_ <- swap $ map (\c -> run prog c (binds,st2)) clauses
+    (_, st3):_ <- flip $ map (\c -> runClause prog c (binds,st2)) clauses
     
     -- pull values from the stack according to 'outs'
     (bs4, st4) <- unifyAll outs st3
     
-    -- push values on the stack, using local and global bindings
-    let outbinds = bs4 ++ binds
-    return (outbinds, map (// outbinds) ctrs ++ st4)
+    return (bs4 ++ binds, st4)
 
 
 unifyAll :: [Pat] -> Stack -> Maybe (Binds, Stack)
@@ -58,11 +64,12 @@ unifyAll (p:pats) (v:vals) =
     case (unify p v, unifyAll pats vals) of
         (Just b, Just (bs, vals)) -> Just (b ++ bs, vals)
         _                         -> Nothing
+unifyAll _ _ = Nothing
 
 unify :: Pat -> Value -> Maybe Binds
 unify (PVar name) val   = Just [(name,val)]
 unify (Pat pname pats) (Value vname vals)
-    | pname == vname    = fmap concat $ swap $ map (uncurry unify) (unzip_1 (pats,vals))
+    | pname == vname    = fmap concat $ flip $ map (uncurry unify) (unzip_1 (pats,vals))
     | otherwise         = Nothing
 
 (//) :: Pat -> Binds -> Value
@@ -71,16 +78,7 @@ unify (Pat pname pats) (Value vname vals)
 (Pat name pats) // binds =
     Value name (map (// binds) pats)
 
--- lookup arrow definition in the program
-aDef :: Program -> Name -> ADef
-aDef (Program prog) name =
-    fromJust $ find p prog
-    where p (ADef n _) = n == name
-
 -- some datatypes
-
-true  = Value "True" []
-false = Value "False" []
 
 int2Value :: Int -> Value
 int2Value 0 = Value "Z" []
@@ -90,62 +88,19 @@ value2Int :: Value -> Int
 value2Int (Value "Z" [])  = 0
 value2Int (Value "S" [n]) = (value2Int n) + 1
 
-zero  = Value "Z" []
-one   = Value "S" [zero]
-two   = Value "S" [one]
-three = Value "S" [two]
-
-prog1 = Program [
-    ADef "add" [
-        (   [Pat "Z" [], PVar "y"]
-        ,   AId
-        ,   [PVar "y"]
-        ) ,
-        (   [Pat "S" [PVar "x"], PVar "y"]
-        ,   ACall [PVar "x", PVar "y"] "add" [PVar "r"]
-        ,   [Pat "S" [PVar "r"]]
-        )
-    ] ,
---     ADef "mult" [
---         (   [Pat "Z" [], PVar "y"]
---         ,   AId
---         ,   [Pat "Z" []]
---         ) ,
---         (   [Pat "S" [PVar "x"], PVar "y"]
---         ,   
---     ] ,
-    ADef "even" [
-        (   [Pat "Z" []]
-        ,   AId
-        ,   [Pat "True" []]
-        ) ,
-        (   [Pat "S" [PVar "x"]]
-        ,   ACall [PVar "x"] "odd" [PVar "0"]
-        ,   [PVar "0"]
-        )
-    ] ,
-    ADef "odd" [
-        (   [Pat "Z" []]
-        ,   AId
-        ,   [Pat "False" []]
-        ) ,
-        (   [Pat "S" [PVar "x"]]
-        ,   ACall [PVar "x"] "even" [PVar "0"]
-        ,   [PVar "0"]
-        )
-    ]
-    ]
-   
-
-
-
 -- Helper functions
 
--- this should be an instance of Swap [] Maybe
-swap :: [Maybe a] -> Maybe [a]
-swap []             = Just []
-swap (Nothing : xs) = swap xs
-swap (Just x : xs)  = fmap ((:) x) (swap xs)
+chain :: Monad m => [a -> m a] -> a -> m a
+chain (f:fs) x =
+    f x >>= \y -> chain fs y
+chain [] x =
+    return x
+
+-- this should be an instance of Flip [] Maybe
+flip :: [Maybe a] -> Maybe [a]
+flip []             = Just []
+flip (Nothing : xs) = flip xs
+flip (Just x : xs)  = fmap ((:) x) (flip xs)
 
 -- inverse of unzip, a zip expecting lists of equal length
 unzip_1 :: ([a],[b]) -> [(a,b)]

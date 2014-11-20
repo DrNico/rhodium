@@ -6,12 +6,12 @@
 module Rhodium.Parse
 where
 
-import Prelude (($), const)
+import Prelude (($), const, (==))
 
--- import Arrow.ArrowPlus
+import Arrow.ArrowMany
+import Arrow.Lexer
 import Rhodium.Types
 import Util.Parser
--- import Util.Parser.Lexer
 
 import Control.Arrow
 import Control.Category
@@ -28,13 +28,51 @@ import Data.Monoid
     atom        ::= upper alphanum*
 -}
 
-type Prod       = Parser * (->) ()
-type Terminal   = Parser * (->) () ByteString
-type Separator  = Parser * (->) () ()
+type Prod r         = Parser r ()
+type Terminal r     = Parser r () ByteString
+type Separator r    = Parser r () ()
 
-morphism :: Prod Morphism
+program :: Prod r Program
+program = proc () -> do
+    defs <- defblock `sepByL` vskip -< ()
+    returnA -< Program defs
+
+defblock :: Prod r (Name, Value)
+defblock = proc () -> do
+    name <- ident -< ()
+    manyws -< ()
+    lex_ $ word8 123 -< () -- '{'
+    vskip -< ()
+    clauses <- clause `sepByL` vskip -< ()
+    vskip -< ()
+    lex_ $ word8 125 -< () -- '}'
+    returnA -< (name, VFun clauses)
+
+clause :: Prod r Clause
+clause = proc () -> do
+    head <- morphism -< ()
+    manyws -< ()
+    simple <+> defined -< head
+    where
+    simple = proc head -> do
+        lex_ $ word8 10 -< () -- LF
+        pause -< ()
+        let Morphism ins name outs = head -- TODO: check that name is ok
+        returnA -< Clause ins [] outs
+    defined = proc head -> do
+        lex_ $ string ":=" -< ()
+        vskip -< ()
+        lex_ $ word8 91 -< () -- '['
+        vskip -< ()
+        tail <- morphism `sepByL` vskip -< ()
+        vskip -< ()
+        lex_ $ word8 93 -< () -- ']'
+        let Morphism ins _ outs = head -- TODO: check that name is ok
+        returnA -< Clause ins tail outs
+
+morphism :: Prod r Morphism
 morphism = proc () -> do
-    ins <- pattern `sepBy` somews -< ()
+    ins <- pattern `sepByL` somews -< ()
     manyws -< ()
     fname <- (( proc () -> do
         lex_ $ string ">->" -< ()
@@ -47,10 +85,10 @@ morphism = proc () -> do
         returnA -< fname
         )) -< ()
     manyws -< ()
-    outs <- pattern `sepBy` somews -< ()
+    outs <- pattern `sepByL` somews -< ()
     returnA -< Morphism ins fname outs
 
-pattern :: Prod Pat
+pattern :: Prod r Pat
 pattern = proc () ->
         ( do
         var <- ident -< ()
@@ -58,33 +96,38 @@ pattern = proc () ->
         )
     <+> ( do
         ctr <- atom -< ()
-        args <- option ( proc () -> do
+        args <- option ( proc _ -> do
             lex_ $ char '(' -< ()
-            args <- pattern `sepBy` somews -< ()
+            args <- pattern `sepByL` somews -< ()
             lex_ $ char ')' -< ()
             returnA -< args ) -< []
         returnA -< Pat ctr args
         )
 
 
-ident :: Terminal
+ident :: Terminal r
 ident =
     lex $ lower >>> many alphaNum
 
-atom :: Terminal
+atom :: Terminal r
 atom =
     lex $ upper >>> many alphaNum
 
 -- TODO: handle tabs in horizontal whitespace
-manyws :: Separator
+manyws :: Separator r
 manyws =
-    lex_ $ many $ char ' '
+    lex_ $ takeWhile (== ' ')
 
-somews :: Separator
+somews :: Separator r
 somews =
     lex_ $ some $ char ' '
 
-manyvs :: Separator
+manyvs :: Separator r
 manyvs =
-    lex_ $ many $ char ' ' <+> char '\n' <+> char '\r'
+    lex_ $ many $ word8 32 <+> word8 10
 
+vskip :: Separator r
+vskip = proc () -> do
+    manyws -< ()
+    many ((lex_ $ word8 10) >>> pause >>> manyws) -< ()
+    returnA -< ()

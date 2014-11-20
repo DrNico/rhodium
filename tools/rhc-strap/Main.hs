@@ -1,20 +1,21 @@
 {-# LANGUAGE
-    OverloadedStrings
+    OverloadedStrings, Arrows
   #-}
 
 module Main where
 
 import Prelude hiding ( concat, getLine, putStr, putStrLn, readFile )
 
-import Control.Applicative
-import Data.Attoparsec.ByteString
+import Control.Arrow
 import Data.ByteString ( ByteString, snoc )
 import Data.ByteString.Char8 ( unpack, concat, getLine, putStr, putStrLn, readFile )
 import Data.String ( IsString(fromString) )
 
-import Micro
-import Parse
-import Types
+import Arrow.Lexer
+import Rhodium.Micro
+import Rhodium.Parse
+import Rhodium.Types
+import Util.Parser
 
 
 main :: IO ()
@@ -30,27 +31,25 @@ repl env = do
     putStr "\x1B[2m>>> \x1B[0m"
     line <- getLine
     case parse command (snoc line 10) of
-        Fail _ _ err -> do
+        PFail err -> do
             putStrLn $ fromString err
             repl env
-        Done rest res ->
---            putStrLn $ "Warning: ignored \"" ++ rest
+        PDone res ->
             process res env
-        partial ->
-            more partial
+        PMore f ->
+            more f
     where
     more cont = do
         putStr "... "
         line <- getLine
-        case feed cont (snoc line 10) of
-            Fail _ _ err -> do
+        case fst $ cont (snoc line 10) of
+            PFail err -> do
                 putStrLn $ fromString err
                 repl env
-            Done rest res ->
---                putStrLn $ "Warning: ignored \"" ++ rest
+            PDone res ->
                 process res env
-            partial ->
-                more partial
+            PMore f ->
+                more f
 
 data Command =
     Expr Morphism
@@ -85,43 +84,46 @@ process (Show name) (prog,binds) =
 
 process (Load name) (prog,binds) = do
     file <- readFile $ unpack name
-    case parseOnly program file of
-        Left err -> do
+    case parse program of
+        PFail err -> do
             putStrLn $ fromString err
             repl (prog,binds)
-        Right (Program newdefs) -> do
+        PDone (Program newdefs) -> do
             let Program defs = prog
             repl (Program $ newdefs ++ defs,binds)
+--        PMore f -> f "\EOF" and check
             
 process Quit env = return env
     
-command :: Parser Command
+command :: Prod r Command
 command =
-        ( do
-            string "#show"
-            somews
-            name <- ident
-            manyws
-            word8 10
-            return $ Show name
+        ( proc () -> do
+            lex_ $ string "#show" -< ()
+            somews -< ()
+            name <- ident -< ()
+            manyws -< ()
+            lex_ $ word8 10 -< ()
+            returnA -< Show name
         )
-    <|> ( do
-            string "#load"
-            somews
-            name <- ident
-            return $ Load name
+    <+> ( proc () -> do
+            lex_ $ string "#load" -< ()
+            somews -< ()
+            name <- ident -< ()
+            manyws -< ()
+            lex_ $ word8 10 -< ()
+            returnA -< Load name
         )
-    <|> ( do
-            string "#quit"
-            return Quit
+    <+> ( proc () -> do
+            lex_ $ string "#quit\n" -< ()
+            returnA -< Quit
         )
-    <|> ( do
-            def <- defblock
-            return $ Def def
+    <+> ( proc () -> do
+            def <- defblock -< ()
+            returnA -< Def def
         )
-    <|> ( do
-            mor <- morphism
-            return $ Expr mor
+    <+> ( proc () -> do
+            mor <- morphism -< ()
+            returnA -< Expr mor
         )
 
 motd :: [ByteString]

@@ -1,5 +1,5 @@
 {-# LANGUAGE
-    GADTs,
+    GADTs, Arrows,
     MultiParamTypeClasses, FlexibleInstances,
     GeneralizedNewtypeDeriving
   #-}
@@ -8,10 +8,10 @@ module Arrow.Lexer where
 
 import Prelude (
         ($), Char, Bool, (||), String,
-        Eq(..), Ord(..), Maybe(..), Show(..), (++)
+        Eq(..), Ord(..), Maybe(..), Show(..), (++), Enum(..)
     )
 
-import Control.Applicative
+import Control.Applicative hiding (some,many)
 import Control.Arrow
 import Control.Arrow.Operations
 import Control.Arrow.Transformer.State
@@ -20,7 +20,10 @@ import Control.Monad
 import Data.ByteString
 import qualified Data.ByteString.UTF8 as UTF
 import Data.Char
+import Data.Word
 import Text.Show
+
+import Arrow.ArrowMany
 
 -- Implementation notes:
 --  add a capture strategy
@@ -33,6 +36,16 @@ newtype LexerArrow i o = LexerArrow {
                  -- (i, BS) -> LResult (o, BS)
     } deriving (Category, Arrow, ArrowChoice, ArrowApply, ArrowZero, ArrowPlus)
 
+instance ArrowMany LexerArrow where
+    some f = proc i -> do
+        x  <- f -< i
+        xs <- many f -< i
+        returnA -< x : xs
+    
+    many f = proc i -> do
+        some f -< i
+       <+> do
+        returnA -< []
 
 -- | Lexing results either in
 --    * success with input of lexer copied in output
@@ -65,6 +78,9 @@ alpha = satisfy isAlpha <?> "alpha"
 digit :: LexerArrow i i
 digit = satisfy isDigit <?> "digit"
 
+alphaNum :: LexerArrow i i
+alphaNum = satisfy isAlphaNum <?> "alphaNum"
+
 space :: LexerArrow i i
 space = satisfy isSpace <?> "space"
 
@@ -76,6 +92,14 @@ upper = satisfy isUpper <?> "upper-case letter"
 
 char :: Char -> LexerArrow i i
 char c = satisfy (== c) <?> "character '" ++ (c : "'")
+
+word8 :: Word8 -> LexerArrow i i
+word8 c = LexerArrow $ StateArrow $ Kleisli $ \(x,s) ->
+    case uncons s of
+        Just (d,s') | c == d ->
+            LDone (x,s')
+        _ ->
+            LFail $ "word8 '" ++ (chr $ fromEnum c) : "'"
 
 newline :: LexerArrow i i
 newline = (satisfy $ \c -> (c == '\n') || (c == '\r')) <?> "newline"
