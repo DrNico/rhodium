@@ -56,6 +56,7 @@ data Command =
   | Def (Name, Value)
   | Load ByteString
   | Show ByteString
+  | Dump
   | Quit
 
 process :: Command -> Env -> IO Env
@@ -84,15 +85,22 @@ process (Show name) (prog,binds) =
 
 process (Load name) (prog,binds) = do
     file <- readFile $ unpack name
-    case parse program of
-        PFail err -> do
-            putStrLn $ fromString err
-            repl (prog,binds)
-        PDone (Program newdefs) -> do
-            let Program defs = prog
-            repl (Program $ newdefs ++ defs,binds)
---        PMore f -> f "\EOF" and check
-            
+    let res  = parse program file
+        loop = \x -> case x of
+                        PFail err -> do
+                            putStrLn $ fromString err
+                            repl (prog,binds)
+                        PDone (Program newdefs) -> do
+                            let Program defs = prog
+                            repl (Program $ newdefs ++ defs,binds)
+                        PMore f ->
+                            loop $ fst $ f "\x04"
+     in loop res
+
+process Dump env@(prog,_) = do
+    showRh prog
+    repl env
+
 process Quit env = return env
     
 command :: Prod r Command
@@ -116,6 +124,10 @@ command =
     <+> ( proc () -> do
             lex_ $ string "#quit\n" -< ()
             returnA -< Quit
+        )
+    <+> ( proc () -> do
+            lex_ $ string "#dump\n" -< ()
+            returnA -< Dump
         )
     <+> ( proc () -> do
             def <- defblock -< ()

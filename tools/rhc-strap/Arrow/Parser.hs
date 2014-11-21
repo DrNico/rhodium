@@ -83,6 +83,7 @@ instance ArrowApply a => ArrowMany (ParserArrow r e a) where
             okSkip          = error "'many' accepted empty input",
             okConsumed      = proc x -> do
                 runParser (many p) plate {
+                    okSkip      = okConsumed plate . arr (x:),
                     okConsumed  = okConsumed plate . arr (x:)
                 } -<< i
         } -<< i

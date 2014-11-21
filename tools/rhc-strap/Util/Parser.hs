@@ -115,7 +115,7 @@ option try =
 
 sepByL :: Parser r () i -> Parser r () e -> Parser r () [i]
 sepByL pat sep = proc () -> do
-    x <- pat -< ()
+    x  <- pat -< ()
     xs <- many $ try (sep >>> (arr $ const ()) >>> pat) -< ()
     returnA -< x : xs
 
