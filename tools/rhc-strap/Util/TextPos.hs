@@ -1,9 +1,10 @@
 
-module Util.Parser.TextPos (
-        TextPos(..)
+module Util.TextPos (
+        TextPos(..), append
     )
 where
 
+import qualified Data.ByteString.UTF8 as BS
 import Data.Monoid
 
 type Line           = Int
@@ -19,3 +20,12 @@ instance Monoid TextPos where
         TextPos
             (l1 + l2)
             (if l2 == 0 then c1+c2 else c2)
+
+append :: TextPos -> BS.ByteString -> TextPos
+append = BS.foldr f
+    where
+    f :: Char -> TextPos -> TextPos
+    f '\n' (TextPos l c) =
+        TextPos (l + 1) 0
+    f _    (TextPos l c) =
+        TextPos l (c + 1)
