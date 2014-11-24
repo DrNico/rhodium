@@ -4,15 +4,17 @@
 
 module Main where
 
-import Prelude hiding ( concat, getLine, putStr, putStrLn, readFile )
+import Prelude hiding ( concat, getLine, putStr, putStrLn, readFile, lookup )
 
 import Control.Arrow
+import Control.Comonad (($>))
 import Data.ByteString ( ByteString, snoc )
 import Data.ByteString.Char8 ( unpack, concat, getLine, putStr, putStrLn, readFile )
 import Data.String ( IsString(fromString) )
 
 import Arrow.Lexer
-import Rhodium.Micro
+import Rhodium.Eval
+-- import Rhodium.Micro
 import Rhodium.Parse
 import Rhodium.Types
 import Util.Parser
@@ -21,10 +23,10 @@ import Util.Parser
 main :: IO ()
 main = do
     putStrLn $ concat motd
-    repl (Program [],[])
+    repl $ Context [] [] ()
     return ()
 
-type Env = (Program, Binds)
+type Env = Context Value ()
 
 repl :: Env -> IO Env
 repl env = do
@@ -60,46 +62,45 @@ data Command =
   | Quit
 
 process :: Command -> Env -> IO Env
-process (Def def) (Program defs,binds) =
-    repl (Program $ def:defs, binds)
+process (Def def) (Context bs st ()) =
+    repl $ Context (def:bs) st ()
 
-process (Expr mor) (prog,binds) =
-    case runMorphism prog mor (binds,[]) of
-        Just (binds', []) ->
-            repl (prog,binds')
+process (Expr mor) ctx =
+    case evalMorphism (ctx $> mor) of
+        Just ctx@(Context _ [] _) ->
+            repl ctx
         Just _ -> do
             putStrLn $ "Error: uncaptured output arguments."
-            repl (prog,binds)
+            repl ctx
         Nothing -> do
             putStrLn $ "Fail."
-            repl (prog,binds)
+            repl ctx
 
-process (Show name) (prog,binds) =
-    case lookup name binds of
+process (Show name) ctx =
+    case lookup name ctx of
         Just v -> do
             showRh v
-            repl (prog,binds)
+            repl ctx
         Nothing -> do
             putStrLn $ "Error: undefined variable."
-            repl (prog,binds)
+            repl ctx
 
-process (Load name) (prog,binds) = do
+process (Load name) ctx = do
     file <- readFile $ unpack name
     let res  = parse program file
         loop = \x -> case x of
                         PFail err -> do
                             putStrLn $ fromString err
-                            repl (prog,binds)
+                            repl ctx
                         PDone (Program newdefs) -> do
-                            let Program defs = prog
-                            repl (Program $ newdefs ++ defs,binds)
+                            repl ctx { binds = newdefs ++ (binds ctx) }
                         PMore f ->
                             loop $ fst $ f "\x04"
      in loop res
 
-process Dump env@(prog,_) = do
-    showRh prog
-    repl env
+process Dump ctx@(Context bs _ _) = do
+    showRh $ Program bs
+    repl ctx
 
 process Quit env = return env
     
