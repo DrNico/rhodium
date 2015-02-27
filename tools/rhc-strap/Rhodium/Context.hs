@@ -180,7 +180,8 @@ genObN n = sized term'
                 return $ Var i
             , do
                 letter <- choose ('a','f')
-                MkOb args <- resize (m `div` 2) arbitrary
+                nargs <- choose (0, m `div` 2)
+                MkOb args <- resize nargs arbitrary
                 return $ Pred [letter] args
             ]
 
