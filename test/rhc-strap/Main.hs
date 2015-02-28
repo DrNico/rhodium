@@ -1,9 +1,8 @@
 
 module Main where
 
-import Test.QuickCheck
-import Test.QuickCheck.Monadic
+import TestRhodium.Context (testContext)
 
 main :: IO ()
 main =
-    putStrLn "All tests passed successfully."
+    testContext
