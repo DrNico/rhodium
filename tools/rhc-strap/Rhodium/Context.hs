@@ -24,6 +24,15 @@ data HomC = HomC {
     }
     deriving (Eq,Show)
 
+-- ## TODO: introduce a 'Checked' Monad, tagging terms that have been type-checked.
+-- pure  :: ObC -> Checked ObC
+-- id    :: Checked ObC -> Checked HomC
+-- <^.^> :: HomC -> HomC -> Checked HomC
+-- <.^>  :: Checked HomC -> HomC -> Checked HomC
+-- <^.>  :: HomC -> Checked HomC -> Checked HomC
+-- <.>   :: Checked HomC -> Checked HomC -> Checked HomC
+
+
 ---- Dependent projection
 ft :: ObC -> ObC
 ft = tail
@@ -48,18 +57,19 @@ id obs = HomC {
     morph = zipWith (\_ i -> Var i) obs (iterate (+ 1) 0)
     }
 
+-- | Composition of morphisms.
+(.) :: HomC -> HomC -> HomC
+g . f = HomC {
+        source = source f,
+        target = target g,
+        morph = fmap (subst $ morph f) (morph g)
+    }
+
 -- | Composition of morphisms in a Contextual Category.
--- ## TODO: introduce a 'Checked' Monad, tagging terms that have been type-checked.
--- pure  :: ObC -> Checked ObC
--- id    :: Checked ObC -> Checked HomC
--- <^.^> :: HomC -> HomC -> Checked HomC
--- <.^>  :: Checked HomC -> HomC -> Checked HomC
--- <^.>  :: HomC -> Checked HomC -> Checked HomC
--- <.>   :: Checked HomC -> Checked HomC -> Checked HomC
-(.) :: (Error e, MonadError e m)
+(<.>) :: (Error e, MonadError e m)
     => HomC -> HomC
     -> m HomC
-g . f =
+g <.> f =
     if target f == source g
     then return HomC {
             source = source f,
@@ -72,13 +82,13 @@ subst :: [Term Int] -> Term Int -> Term Int
 subst s (Var i) = s !! i
 subst s (Pred p vs) = Pred p (fmap (subst s) vs)
 
--- ## TODO: check precondition
+-- Precondition:
 --   ft ob == target f
 pullback :: HomC -> ObC -> ObC
 pullback f ob =
     (subst (morph f) (head ob)) : (source f)
 
--- ## TODO: check precondition
+-- Precondition
 --   ft ob == target f
 q :: HomC -> ObC -> HomC
 q f ob = 

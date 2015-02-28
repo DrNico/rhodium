@@ -27,6 +27,12 @@ check_pb1 (MkOb ob) = not (null ob)
 check_pb2 (MkOb ob) = not (null ob)
     ==> q (id (ft ob)) ob == id ob
 
+check_pb3 :: GenHom -> Gen Bool
+check_pb3 (MkHom f) = do
+    o <- genObN $ length (morph f)
+    let ob = o : (target f)
+    return $ (proj $ target $ q f ob) . (q f ob) == f . (proj $ pullback f ob)
+
 -- arguments of 'pullback f ob' must satisfy
 --   ft ob == target f
 {-
