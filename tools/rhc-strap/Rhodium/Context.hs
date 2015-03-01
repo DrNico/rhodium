@@ -6,8 +6,6 @@ module Rhodium.Context where
 
 import Control.Monad (zipWithM)
 import Control.Monad.Error.Class
-import Test.QuickCheck
-import Test.QuickCheck.Monadic (PropertyM, run, monadic)
 
 import Prelude hiding ((.), id)
 
@@ -74,7 +72,7 @@ g <.> f =
     then return HomC {
             source = source f,
             target = target g,
-            morph = fmap (subst $ morph g) (morph f)
+            morph = fmap (subst $ morph f) (morph g)
         }
     else throwError $ strMsg "error"
 
@@ -106,6 +104,28 @@ incr (t:ts) = fmap (+ 1) t : incr ts
 -----
 -- Instances
 -----
+
+class ShowRh c where
+	showRh :: c -> String
+
+instance Show var => ShowRh (Term var) where
+	showRh (Var v) = show v
+	showRh (Pred a vs) = case vs of
+		[]   -> show a
+		vs   -> show a ++ "(" ++ showList vs ++ ")"
+		where
+		showList [] = ""
+		showList v:[] = showRh v
+		showList v:vs = showRh v ++ "," ++ showList vs
+{-
+instance ShowRh HomC where
+	showRh f =
+		-- x0 : t0, x1 : t1, x2 : x0 :- f0 : t2, f1 : 
+		showAssump (source f) ++ " :- " ++ showTerms (morph f) (target f)
+		where
+		showAssump [] = ""
+		showAssump x:xs = 
+-}	
 
 instance Functor Term where
     fmap f (Var x) = Var (f x)

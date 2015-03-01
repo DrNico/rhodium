@@ -33,21 +33,6 @@ check_pb3 (MkHom f) = do
     let ob = o : (target f)
     return $ (proj $ target $ q f ob) . (q f ob) == f . (proj $ pullback f ob)
 
--- arguments of 'pullback f ob' must satisfy
---   ft ob == target f
-{-
-check_pb3 (MkHom f) =
-    let extract (Left _) = False
-        extract (Right b) = b
-        test :: Either String Bool = do
-            MkOb [o] <- resize 1 arbitrary -- ## TODO: should also generate variables
-            let ob = o : (target f)
-            lft <- (proj $ target $ q f ob) . (q f ob)
-            rgt <- f . (proj $ pullback f ob)
-            return $ lft == rgt
-    in do
-        extract (test ob)
--}
 -- Instances
 
 newtype GenOb = MkOb {
@@ -99,7 +84,7 @@ newtype GenHom = MkHom {
 
 instance Arbitrary GenHom where
     arbitrary = sized $ \siz -> do
-        srcsiz <- choose (0,siz-1)
+        srcsiz <- choose (0,siz)
         let tgtsiz = siz - srcsiz
         MkOb src <- resize srcsiz arbitrary
         MkOb tgt <- resize tgtsiz arbitrary
