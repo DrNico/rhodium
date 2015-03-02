@@ -21,27 +21,22 @@ testContext = do
 -- 5)    q (g . f) ob == q g (pullback f ob) . q f ob
 
 
-check_pb1 (MkOb ob) = not (null ob)
+check_pb1 ob@(ObC ts) = not (null ts)
     ==> pullback (id (ft ob)) ob == ob
 
-check_pb2 (MkOb ob) = not (null ob)
+check_pb2 ob@(ObC ts) = not (null ts)
     ==> q (id (ft ob)) ob == id ob
 
-check_pb3 :: GenHom -> Gen Bool
-check_pb3 (MkHom f) = do
+check_pb3 :: HomC -> Gen Bool
+check_pb3 f = do
     o <- genObN $ length (morph f)
-    let ob = o : (target f)
-    return $ (proj $ target $ q f ob) . (q f ob) == f . (proj $ pullback f ob)
+    let ob = ObC $ o : (target f)
+    return $ (proj $ ObC $ target $ q f ob) . (q f ob) == f . (proj $ pullback f ob)
 
 -- Instances
 
-newtype GenOb = MkOb {
-        unMkOb :: [Term Int]
-    }
-    deriving (Show)
-
-instance Arbitrary GenOb where
-    arbitrary = sized $ \siz -> fmap MkOb $ gen siz (siz `div` 2)
+instance Arbitrary ObC where
+    arbitrary = sized $ \siz -> fmap ObC $ gen siz (siz `div` 2)
         where
         gen m 0 = return []
         gen m n = do
@@ -72,24 +67,18 @@ genObN n = sized term'
             , do
                 letter <- choose ('a','f')
                 nargs <- choose (0, m `div` 2)
-                MkOb args <- resize nargs arbitrary  -- ## MOD: carry 'm'
+                ObC args <- resize nargs arbitrary  -- ## MOD: carry 'm'
                 return $ Pred [letter] args
             ]
 
-newtype GenHom = MkHom {
-        unMkHom :: HomC
-    }
-    deriving (Show)
-
-
-instance Arbitrary GenHom where
+instance Arbitrary HomC where
     arbitrary = sized $ \siz -> do
         srcsiz <- choose (0,siz)
         let tgtsiz = siz - srcsiz
-        MkOb src <- resize srcsiz arbitrary
-        MkOb tgt <- resize tgtsiz arbitrary
-        MkOb m <- resize tgtsiz arbitrary
-        return $ MkHom $ HomC {
+        ObC src <- resize srcsiz arbitrary
+        ObC tgt <- resize tgtsiz arbitrary
+        ObC m <- resize tgtsiz arbitrary -- ## MOD: generate morphisms
+        return $ HomC {
                 source = src,
                 target = tgt,
                 morph  = m  -- ## TODO: build a type-correct morphism

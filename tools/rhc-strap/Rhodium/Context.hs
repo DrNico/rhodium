@@ -1,10 +1,6 @@
-{-# LANGUAGE
-    ScopedTypeVariables
-  #-}
 
 module Rhodium.Context where
 
-import Control.Monad (zipWithM)
 import Control.Monad.Error.Class
 
 import Prelude hiding ((.), id)
@@ -14,34 +10,25 @@ data Term var
   | Pred String [Term var]
   deriving (Eq,Show)
 
-type ObC  = [Term Int]
+data ObC  = ObC [Term Int] deriving (Eq)
 data HomC = HomC {
-        source      :: ObC,
-        target      :: ObC,
+        source      :: [Term Int],
+        target      :: [Term Int],
         morph       :: [Term Int]
     }
-    deriving (Eq,Show)
-
--- ## TODO: introduce a 'Checked' Monad, tagging terms that have been type-checked.
--- pure  :: ObC -> Checked ObC
--- id    :: Checked ObC -> Checked HomC
--- <^.^> :: HomC -> HomC -> Checked HomC
--- <.^>  :: Checked HomC -> HomC -> Checked HomC
--- <^.>  :: HomC -> Checked HomC -> Checked HomC
--- <.>   :: Checked HomC -> Checked HomC -> Checked HomC
-
+    deriving (Eq)
 
 ---- Dependent projection
 ft :: ObC -> ObC
-ft = tail
+ft (ObC ob) = ObC $ tail ob
 
 -- Pre-condition Ob_n , n > 0
 proj :: ObC -> HomC
-proj obs = HomC {
+proj (ObC obs) = HomC {
         source = obs,
-        target = ft obs,
+        target = tail obs,
         morph = do
-            _ <- ft obs
+            _ <- tail obs
             fmap Var $ iterate (+ 1) 1
     }
 
@@ -49,7 +36,7 @@ proj obs = HomC {
 
 -- | Identity morphism.
 id :: ObC -> HomC
-id obs = HomC {
+id (ObC obs) = HomC {
     source = obs,
     target = obs,
     morph = zipWith (\_ i -> Var i) obs (iterate (+ 1) 0)
@@ -63,19 +50,6 @@ g . f = HomC {
         morph = fmap (subst $ morph f) (morph g)
     }
 
--- | Composition of morphisms in a Contextual Category.
-(<.>) :: (Error e, MonadError e m)
-    => HomC -> HomC
-    -> m HomC
-g <.> f =
-    if target f == source g
-    then return HomC {
-            source = source f,
-            target = target g,
-            morph = fmap (subst $ morph f) (morph g)
-        }
-    else throwError $ strMsg "error"
-
 subst :: [Term Int] -> Term Int -> Term Int
 subst s (Var i) = s !! i
 subst s (Pred p vs) = Pred p (fmap (subst s) vs)
@@ -83,17 +57,17 @@ subst s (Pred p vs) = Pred p (fmap (subst s) vs)
 -- Precondition:
 --   ft ob == target f
 pullback :: HomC -> ObC -> ObC
-pullback f ob =
-    (subst (morph f) (head ob)) : (source f)
+pullback f (ObC obs) =
+    ObC $ (subst (morph f) (head obs)) : (source f)
 
 -- Precondition
 --   ft ob == target f
 q :: HomC -> ObC -> HomC
-q f ob = 
-    let fstar = pullback f ob 
+q f ob@(ObC obs) = 
+    let ObC fstar = pullback f ob
     in HomC {
         source = fstar,
-        target = ob,
+        target = obs,
         morph = (Var 0) : (incr $ morph f)
     }
 
@@ -105,30 +79,33 @@ incr (t:ts) = fmap (+ 1) t : incr ts
 -- Instances
 -----
 
-class ShowRh c where
-	showRh :: c -> String
-
-instance Show var => ShowRh (Term var) where
-	showRh (Var v) = show v
-	showRh (Pred a vs) = case vs of
-		[]   -> show a
-		vs   -> show a ++ "(" ++ showList vs ++ ")"
-		where
-		showList [] = ""
-		showList v:[] = showRh v
-		showList v:vs = showRh v ++ "," ++ showList vs
-{-
-instance ShowRh HomC where
-	showRh f =
-		-- x0 : t0, x1 : t1, x2 : x0 :- f0 : t2, f1 : 
-		showAssump (source f) ++ " :- " ++ showTerms (morph f) (target f)
-		where
-		showAssump [] = ""
-		showAssump x:xs = 
--}	
-
 instance Functor Term where
     fmap f (Var x) = Var (f x)
     fmap f (Pred a xs) = Pred a (map (fmap f) xs)
 
+instance Show ObC where
+    show (ObC []) = "[obQ||]"
+    show (ObC (o:[])) = "[obQ|" ++ showTerm o ++ "|]"
+    show (ObC (o:os)) = "[obQ|" ++ showTermList os ++ ", " ++ showTerm o ++ "|]"
 
+instance Show HomC where
+	show f =
+	    "[homQ|" ++ showTermList (source f) ++
+	    " :- " ++ showJudgList (zip (morph f) (target f)) ++
+	    "|]"
+
+showTerm :: Show var => Term var -> String
+showTerm (Var v) = show v
+showTerm (Pred a vs) = case vs of
+    [] -> a
+    vs -> a ++ "(" ++ showTermList vs ++ ")"
+
+showTermList :: Show var => [Term var] -> String
+showTermList [] = ""
+showTermList (v:[]) = showTerm v
+showTermList (v:vs) = showTermList vs ++ ", " ++ showTerm v
+
+showJudgList :: Show var => [(Term var,Term var)] -> String
+showJudgList [] = ""
+showJudgList ((trm,typ):[]) = showTerm trm ++ ":" ++ showTerm typ
+showJudgList ((trm,typ):js) = showJudgList js ++ ", " ++ showTerm trm ++ ":" ++ showTerm typ
