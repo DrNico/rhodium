@@ -1,0 +1,121 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Rhodium by DrNico</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <script src="javascripts/scale.fix.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1>Rhodium</h1>
+        <p>Rhodium programming language</p>
+        <p class="view"><a href="https://github.com/DrNico/rhodium">View the Project on GitHub <small>DrNico/rhodium</small></a></p>
+        <ul>
+          <li><a href="https://github.com/DrNico/rhodium/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/DrNico/rhodium/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/DrNico/rhodium">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <h1>
+<a id="rhodium" class="anchor" href="#rhodium" aria-hidden="true"><span class="octicon octicon-link"></span></a>Rhodium</h1>
+
+<p>Rhodium is a programming language, currently in development, designed with the following goals in mind:</p>
+
+<ul>
+<li>powerful type inference</li>
+<li>complex tasks expressed in concise code</li>
+<li>fast execution</li>
+</ul>
+
+<p>that is, the goals of pretty much every language out there.</p>
+
+<h3>
+<a id="why" class="anchor" href="#why" aria-hidden="true"><span class="octicon octicon-link"></span></a>Why?</h3>
+
+<p>So <em>why</em> yet another language? Here is the Creator's personnal opinion, built up over ten years of toying 
+around with many languages in an attempt to use them for serious mathematics and engineering.</p>
+
+<ul>
+<li>Because Mathematica, supposed to be a platform for Mathematics, is suprisingly unsound and kludgy.
+The non-commutative multiplication operator is simply defective. As a programming language it is
+not interesting at all.</li>
+<li>Because Python, although a great scripting language, is out of its depth in computing-intensive and
+rigorous mathematical tasks. The immense Sage package for mathematics is a great demonstration of a giant kludge.
+Python's "duck-typing" system is fun to use and versatile, but not rigorous enough for serious math.</li>
+<li>Because C++ suffers from its respectable age of a half-century, is painfully verbose,
+and generally is becoming more complex as it is being "improved".</li>
+<li>Because Swift, although a recent and amazing object-oriented imperative language (the best, in my opinion), is still
+a child of the old imperative programming tradition, and it is just time to move on.</li>
+<li>Because Haskell, the flagship functional programming language, has been great in establishing the power of this
+style of programming, but is also showing its age. It is also becoming very complex as it is "improved", basically
+always requiring several GHC extensions to use with the latest programming techniques.</li>
+<li>Because Coq and other proof-assistants, although impressive in their reasoning power, have been designed
+by mathematicians, for mathematicians, and are not appealing as programming languages.</li>
+</ul>
+
+<p>Based on this historical account, the Creator thinks it is time to start from scratch with 21st century ideas: <strong>Rhodium</strong>.</p>
+
+<h3>
+<a id="what" class="anchor" href="#what" aria-hidden="true"><span class="octicon octicon-link"></span></a>What?</h3>
+
+<p>So what should a new language look like? It should have:</p>
+
+<ul>
+<li>Type inference, relieving the programmer of writing a lot of type annotations</li>
+<li>Modern and simple syntax, imperative style belongs to the last century</li>
+<li>Compilation to machine code for wicked-fast execution</li>
+<li>On-the-fly compilation, possibly into bit-code, for dynamic programming</li>
+</ul>
+
+<h3>
+<a id="how" class="anchor" href="#how" aria-hidden="true"><span class="octicon octicon-link"></span></a>How?</h3>
+
+<p>In an attempt to achieve the design goals, Rhodium is based on three exciting recent developments in Computer Science:</p>
+
+<ul>
+<li>Homotopy of Type Theory is an hot research topic in theoretical Computer Science, tying together
+type theory, homotopy (roughly geometry), and logic. A type system based on this theory can of course
+check if a program is type-correct, however it can also check, and eventually prove by itself, logical proofs.
+It makes heavy use of the correspondence: types are logical predicates, programs are proofs.</li>
+<li>LLVM is a collection of modular and reusable compiler and toolchain technologies. It is a modern, fast,
+optimizing back-end for compiling to numerous targets. It is a very active project, winner of the
+2012 Software System ACM award, and is used by Apple as its compiler back-end for both OSX and iOS software.</li>
+<li>Arrows inherited their name from Category Theory, a branch of mathematics especially well suited to
+describe programs and their effects. They suggest an interesting syntax, implemented as an extension in several Haskell
+compilers, for concise programming in the presence of side-effects, error recovery, state manipulation,
+stream manipulation and many other areas. Arrows take a central place in Rhodium, much as Monads take a central
+place in Haskell for imperative-like programming in a purely functional language.</li>
+</ul>
+
+<p>The main challenge in developing Rhodium is to put together rigorous theoretical concepts and a modern high-performance
+compilation system, to produce a language that is both simple to use and solidly based on sound, deep, mathematical
+concepts. Rhodium is meant to be great for "programming in the large", while having at its core a powerful
+modern type system.</p>
+
+<h3>
+<a id="when" class="anchor" href="#when" aria-hidden="true"><span class="octicon octicon-link"></span></a>When?</h3>
+
+<p>A working interpreter is expected by mid-2015, and a compiler by the end of 2015. The first stable release of a decent
+compiler with a decent memory allocator will probably have to wait until 2016. Until that time, all the details of the
+language, its syntax, execution model, memory model, are in flux.</p>
+      </section>
+    </div>
+    <footer>
+      <p>Project maintained by <a href="https://github.com/DrNico">DrNico</a></p>
+      <p>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></p>
+    </footer>
+    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
+    
+  </body>
+</html>
