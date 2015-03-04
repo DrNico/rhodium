@@ -1,6 +1,7 @@
 
 module Rhodium.Context where
 
+import Control.Exception.Base (assert)
 import Control.Monad.Error.Class
 
 data Term var
@@ -48,10 +49,12 @@ unit (ObC obs) = HomC {
 
 -- | Composition of morphisms.
 comp :: Hom2C -> HomC
-comp (Hom2C g f) = HomC {
+comp (Hom2C g f) =
+    assert (target f == source g) $
+    HomC {
         source = source f,
         target = target g,
-        morph = fmap (subst $ morph f) (morph g)
+        morph = map (subst $ morph f) (morph g)
     }
 
 subst :: [Term Int] -> Term Int -> Term Int
@@ -67,7 +70,7 @@ proj :: ObC -> HomC
 proj (ObC obs) = HomC {
         source = obs,
         target = tail obs,
-        morph = zipWith (\_ i -> Var i) (tail obs) (iterate (+ 1) 0)
+        morph = zipWith (\_ i -> Var i) (tail obs) (iterate (+ 1) 1)
     }
 
 -- Precondition:

@@ -32,7 +32,8 @@ testContext = do
 -----
 
 tests = [
-    testGroup "Pullbacks are functorial"
+        testGroup "Basic operations" []  -- unit, compose commutes, etc.
+    ,   testGroup "Pullbacks are strict functors"
         [
             testGroup "diagram 1" testDiagram1
         ]
@@ -63,6 +64,16 @@ testDiagram1 =
     ,   testCase "eq5" $
             q (f <.> g) ob @=? q f ob <.> q g (pullback f ob)
     ]
+
+ob = ObC [Pred "B" [Var 1,Var 0],Var 0, Pred "A" []]
+f = HomC {
+        source = [Pred "b" []],
+        target = [Var 0,Pred "A" []],
+        morph = [Var 0, Pred "a" []] }
+g = HomC {
+        source = [Var 0,Pred "C" []],
+        target = [Pred "b" []],
+        morph = [Pred "h" [Var 0]] }
 
 -----
 -- QuickCheck
