@@ -3,15 +3,22 @@ module TestRhodium.Context where
 
 import Rhodium.Context
 
+import Test.Framework
+import Test.Framework.Providers.QuickCheck2 (testProperty)
+import Test.Framework.Providers.HUnit (testCase)
+import Test.HUnit
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
 
 import Prelude hiding (id,(.))
 
+-- test driver, called from 'main'
 testContext :: IO ()
 testContext = do
+    defaultMain tests
     quickCheck $ label "pullback (id (ft ob)) ob == ob" check_pb1
     quickCheck $ label "q (id (ft ob)) ob == id ob" check_pb2
+
 
 -- Test the equations
 -- 1)    pullback (id (ft ob)) ob == ob
@@ -20,29 +27,73 @@ testContext = do
 -- 4)    pullback (g . f) ob == pullback g (pullback f ob)
 -- 5)    q (g . f) ob == q g (pullback f ob) . q f ob
 
+-----
+-- HUnit
+-----
+
+tests = [
+    testGroup "Pullbacks are functorial"
+        [
+            testGroup "diagram 1" testDiagram1
+        ]
+    ]
+
+-- ob = [A, $1, Pred "B" [$2, $1]]
+-- f = x0 : b :- a : A, x0 : a
+-- g = x0 : C, x1 : x0 :- h(x1) : b
+testDiagram1 =
+    let ob = ObC [Pred "B" [Var 1,Var 0],Var 0, Pred "A" []]
+        f = HomC {
+                source = [Pred "b" []],
+                target = [Var 0,Pred "A" []],
+                morph = [Var 0, Pred "a" []] }
+        g = HomC {
+                source = [Var 0,Pred "C" []],
+                target = [Pred "b" []],
+                morph = [Pred "h" [Var 0]] }
+    in [
+        testCase "eq1" $
+            pullback (unit (ft ob)) ob @=? ob
+    ,   testCase "eq2" $
+            q (unit (ft ob)) ob @=? unit ob
+    ,   testCase "eq3" $
+            proj (ObC $ target $ q f ob) <.> q f ob @=? f <.> proj (pullback f ob)
+    ,   testCase "eq4" $
+            pullback (f <.> g) ob @=? pullback g (pullback f ob)
+    ,   testCase "eq5" $
+            q (f <.> g) ob @=? q f ob <.> q g (pullback f ob)
+    ]
+
+-----
+-- QuickCheck
+-----
 
 check_pb1 ob@(ObC ts) = not (null ts)
-    ==> pullback (id (ft ob)) ob == ob
+    ==> pullback (unit (ft ob)) ob == ob
 
 check_pb2 ob@(ObC ts) = not (null ts)
-    ==> q (id (ft ob)) ob == id ob
+    ==> q (unit (ft ob)) ob == unit ob
 
 check_pb3 :: HomC -> Gen Bool
 check_pb3 f = do
     o <- genObN $ length (morph f)
     let ob = ObC $ o : (target f)
-    return $ (proj $ ObC $ target $ q f ob) . (q f ob) == f . (proj $ pullback f ob)
+    return $ (proj $ ObC $ target $ q f ob) <.> (q f ob)
+              == f <.> (proj $ pullback f ob)
 
 -- Instances
 
 instance Arbitrary ObC where
-    arbitrary = sized $ \siz -> fmap ObC $ gen siz (siz `div` 2)
+    arbitrary = sized $ \siz -> do
+        siz' <- choose (0,siz)
+        obs <- resize (siz `div` 2) $ gen siz'
+        return $ ObC obs
         where
-        gen m 0 = return []
-        gen m n = do
-            m <- choose (0, m `div` 2)
-            o <- genObN n
-            os <- gen m (n - 1)
+        gen :: Int -> Gen [Term Int]
+        gen 0 = return []
+        gen n = do
+            o <- genObN (n - 1)
+            os <- gen (n - 1)
             return $ o : os
 
 
@@ -55,19 +106,19 @@ genObN 0 = do
 genObN n = sized term'
     where
     term' 0 = oneof [ do
-                i <- choose (0,n - 1)
+                i <- choose (1,n)
                 return $ Var i
             , do
                 letter <- choose ('a','f')
                 return $ Pred [letter] []
             ]
     term' m = oneof [ do
-                i <- choose (0,n - 1)
+                i <- choose (1,n)
                 return $ Var i
             , do
                 letter <- choose ('a','f')
                 nargs <- choose (0, m `div` 2)
-                ObC args <- resize nargs arbitrary  -- ## MOD: carry 'm'
+                ObC args <- resize nargs arbitrary  -- ## BUG: carry 'n'
                 return $ Pred [letter] args
             ]
 
@@ -85,4 +136,4 @@ instance Arbitrary HomC where
             }
 
 -- generates two composable Morphisms
--- instance Arbitrary (GenHom,GenHom) where
+-- instance Arbitrary Hom2C where

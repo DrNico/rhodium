@@ -3,20 +3,60 @@ module Rhodium.Context where
 
 import Control.Monad.Error.Class
 
-import Prelude hiding ((.), id)
-
 data Term var
   = Var var
   | Pred String [Term var]
   deriving (Eq,Show)
 
+-- | An Object of the Contextual Category: a context in type theory.
+--   A context is a list of Terms of type Type, with variables
+--   represented by deBruijn indices indicating an *offset* in the list, relative
+--   to the current term.
 data ObC  = ObC [Term Int] deriving (Eq)
+
+-- | A Morphism of the Contextual Category: a term in type theory.
 data HomC = HomC {
         source      :: [Term Int],
         target      :: [Term Int],
         morph       :: [Term Int]
     }
     deriving (Eq)
+
+-- | A Pair of *composable* morphisms of the Contextual Category.
+--   Such a constructed pair should always respect the condition
+--      source lpart == target rpart
+data Hom2C = Hom2C {
+        lpart       :: HomC,
+        rpart       :: HomC
+    }
+    deriving (Eq)
+
+(<.>) :: HomC -> HomC -> HomC
+g <.> f = comp $ Hom2C g f
+
+infixr 9 <.>
+
+---- Morphisms
+
+-- | Identity morphism.
+unit :: ObC -> HomC
+unit (ObC obs) = HomC {
+    source = obs,
+    target = obs,
+    morph = zipWith (\_ i -> Var i) obs (iterate (+ 1) 0)
+    }
+
+-- | Composition of morphisms.
+comp :: Hom2C -> HomC
+comp (Hom2C g f) = HomC {
+        source = source f,
+        target = target g,
+        morph = fmap (subst $ morph f) (morph g)
+    }
+
+subst :: [Term Int] -> Term Int -> Term Int
+subst s (Var i) = s !! i
+subst s (Pred p vs) = Pred p (fmap (subst s) vs)
 
 ---- Dependent projection
 ft :: ObC -> ObC
@@ -27,32 +67,8 @@ proj :: ObC -> HomC
 proj (ObC obs) = HomC {
         source = obs,
         target = tail obs,
-        morph = do
-            _ <- tail obs
-            fmap Var $ iterate (+ 1) 1
+        morph = zipWith (\_ i -> Var i) (tail obs) (iterate (+ 1) 0)
     }
-
----- Morphisms
-
--- | Identity morphism.
-id :: ObC -> HomC
-id (ObC obs) = HomC {
-    source = obs,
-    target = obs,
-    morph = zipWith (\_ i -> Var i) obs (iterate (+ 1) 0)
-    }
-
--- | Composition of morphisms.
-(.) :: HomC -> HomC -> HomC
-g . f = HomC {
-        source = source f,
-        target = target g,
-        morph = fmap (subst $ morph f) (morph g)
-    }
-
-subst :: [Term Int] -> Term Int -> Term Int
-subst s (Var i) = s !! i
-subst s (Pred p vs) = Pred p (fmap (subst s) vs)
 
 -- Precondition:
 --   ft ob == target f
@@ -95,7 +111,7 @@ instance Show HomC where
 	    "|]"
 
 showTerm :: Show var => Term var -> String
-showTerm (Var v) = show v
+showTerm (Var v) = '$' : (show v)
 showTerm (Pred a vs) = case vs of
     [] -> a
     vs -> a ++ "(" ++ showTermList vs ++ ")"
