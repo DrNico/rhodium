@@ -3,14 +3,13 @@ module TestRhodium.Context where
 
 import Rhodium.Context
 
+import qualified Control.Exception.Base as Exc
 import Test.Framework
 import Test.Framework.Providers.QuickCheck2 (testProperty)
 import Test.Framework.Providers.HUnit (testCase)
 import Test.HUnit
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
-
-import Prelude hiding (id,(.))
 
 -- test driver, called from 'main'
 testContext :: IO ()
@@ -37,43 +36,71 @@ tests = [
         [
             testGroup "diagram 1" testDiagram1
         ]
+    ,   testGroup "∏-type structure is coherent"
+        [
+            testGroup "diagram 2.1" testDiagram2_1
+        ]
     ]
 
 -- ob = [A, $1, Pred "B" [$2, $1]]
 -- f = x0 : b :- a : A, x0 : a
 -- g = x0 : C, x1 : x0 :- h(x1) : b
 testDiagram1 =
-    let ob = ObC [Pred "B" [Var 1,Var 0],Var 0, Pred "A" []]
+    let ob = ObC [UpPred "B" [UpVar 1,UpVar 0],UpVar 0, UpPred "A" []]
         f = HomC {
-                source = [Pred "b" []],
-                target = [Var 0,Pred "A" []],
-                morph = [Var 0, Pred "a" []] }
+                source = [UpPred "b" []],
+                target = [UpVar 0,UpPred "A" []],
+                morph = [DnVar 0, DnPred "a" []] }
         g = HomC {
-                source = [Var 0,Pred "C" []],
-                target = [Pred "b" []],
-                morph = [Pred "h" [Var 0]] }
+                source = [UpVar 0,UpPred "C" []],
+                target = [UpPred "b" []],
+                morph = [DnPred "h" [DnVar 0]] }
     in [
         testCase "eq1" $
-            pullback (unit (ft ob)) ob @=? ob
+            pullback (unit (ft ob)) ob @?= ob
     ,   testCase "eq2" $
-            q (unit (ft ob)) ob @=? unit ob
+            q (unit (ft ob)) ob @?= unit ob
     ,   testCase "eq3" $
-            proj (ObC $ target $ q f ob) <.> q f ob @=? f <.> proj (pullback f ob)
+            proj (ObC $ target $ q f ob) <.> q f ob @?= f <.> proj (pullback f ob)
     ,   testCase "eq4" $
-            pullback (f <.> g) ob @=? pullback g (pullback f ob)
+            pullback (f <.> g) ob @?= pullback g (pullback f ob)
     ,   testCase "eq5" $
-            q (f <.> g) ob @=? q f ob <.> q g (pullback f ob)
+            q (f <.> g) ob @?= q f ob <.> q g (pullback f ob)
     ]
 
-ob = ObC [Pred "B" [Var 1,Var 0],Var 0, Pred "A" []]
-f = HomC {
-        source = [Pred "b" []],
-        target = [Var 0,Pred "A" []],
-        morph = [Var 0, Pred "a" []] }
-g = HomC {
-        source = [Var 0,Pred "C" []],
-        target = [Pred "b" []],
-        morph = [Pred "h" [Var 0]] }
+testDiagram2_1 =
+    let obs = [UpPred "D" [],UpPred "C" []]
+        ob = ObC $ obs
+        a  = HomC {
+                source = obs,
+                target = (UpPred "A" [UpVar 1]) : obs,
+                morph  = (DnPred "p" [DnVar 1,DnVar 0]) : (morph $ unit ob)
+            }
+        b  = HomC {
+                source = target a,
+                target = (UpPred "B" [UpVar 1]) : target a,
+                morph  = (DnPred "f" [DnVar 0]) : (morph $ unit $ ObC $ target a)
+            }
+        k = lambda b
+        f = HomC {
+                target = obs,
+                source = [], -- ## TODO
+                morph  = []
+            }
+    in
+    Exc.assert (isSection a) $
+    Exc.assert (isSection b) $
+    [
+        testCase "eq1" $
+            proj (ObC $ target a) <.> a @?= unit ob
+    ,   testCase "eq2" $
+            proj (ObC $ target b) <.> app k a @?= a
+    ,   testCase "eq3" $
+            app k a @?= b <.> a
+        -- pullback f ob == Pi (pullback f oba) (pullback f obb)
+        -- lambda (qf b) == qf (lambda b)
+        -- app (qf k) (qf a) == qf (app k a)
+    ]
 
 -----
 -- QuickCheck
@@ -100,7 +127,7 @@ instance Arbitrary ObC where
         obs <- resize (siz `div` 2) $ gen siz'
         return $ ObC obs
         where
-        gen :: Int -> Gen [Term Int]
+        gen :: Int -> Gen [UpTerm Int]
         gen 0 = return []
         gen n = do
             o <- genObN (n - 1)
@@ -110,29 +137,30 @@ instance Arbitrary ObC where
 
 -- create an arbitrary term that can appear at the head of a list of 
 -- terms forming an Object
-genObN :: Int -> Gen (Term Int)
+genObN :: Int -> Gen (UpTerm Int)
 genObN 0 = do
     letter <- choose ('a','z')
-    return $ Pred [letter] []
+    return $ UpPred [letter] []
 genObN n = sized term'
     where
     term' 0 = oneof [ do
                 i <- choose (1,n)
-                return $ Var i
+                return $ UpVar i
             , do
                 letter <- choose ('a','f')
-                return $ Pred [letter] []
+                return $ UpPred [letter] []
             ]
     term' m = oneof [ do
                 i <- choose (1,n)
-                return $ Var i
+                return $ UpVar i
             , do
                 letter <- choose ('a','f')
                 nargs <- choose (0, m `div` 2)
                 ObC args <- resize nargs arbitrary  -- ## BUG: carry 'n'
-                return $ Pred [letter] args
+                return $ UpPred [letter] args
             ]
 
+{-
 instance Arbitrary HomC where
     arbitrary = sized $ \siz -> do
         srcsiz <- choose (0,siz)
@@ -145,6 +173,6 @@ instance Arbitrary HomC where
                 target = tgt,
                 morph  = m  -- ## TODO: build a type-correct morphism
             }
-
+-}
 -- generates two composable Morphisms
 -- instance Arbitrary Hom2C where

@@ -42,5 +42,6 @@ TODO
 + objects, morphisms, composition in C
 + projections, pullbacks
 - dependent function, dependent pair, one, zero, sum types
+- judgmental equality
 - Check monad, validating all objects at injection
 - type-check from source language
