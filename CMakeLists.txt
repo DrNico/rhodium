@@ -5,6 +5,8 @@ project(Rhodium)
 set (Rhodium_VERSION_MAJOR 1)
 set (Rhodium_VERSION_MINOR 0)
 
+include (AddFileDependencies)
+
 # LLVM Discovery
 find_package(LLVM REQUIRED CONFIG)
 

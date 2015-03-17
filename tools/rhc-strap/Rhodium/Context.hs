@@ -2,27 +2,44 @@
 module Rhodium.Context where
 
 import Control.Exception.Base (assert)
-import Control.Monad.Error.Class
+
+type Label = String
 
 data UpTerm var
   = UpVar var
-  | UpPred String [UpTerm var]
+  | UpPred Label [DnTerm var]
+  -- ^ variables and atoms
   | UpPi (UpTerm var) (UpTerm var)
+  -- ^ dependant product
   | UpSigma (UpTerm var) (UpTerm var)
+  -- ^ dependant sum
+  | UpWType (UpTerm var) (UpTerm var)
+  -- ^ W-types
+  | UpType
+  -- ^ the type of Types
   deriving (Eq,Show)
 
 data DnTerm var
   = DnVar var
-  | DnPred String [DnTerm var]
+  | DnPred Label [DnTerm var]
+  -- ^ variables and atoms
+  | DnType (UpTerm var)
+  -- ^ type reflected as a term
   | DnLambda (DnTerm var)
+  | DnApp (DnTerm var) (DnTerm var)
+  -- ^ dependant product
   | DnPair (DnTerm var) (DnTerm var)
+  | DnSplit (DnTerm var)
+  -- ^ dependant sum
+  | DnSup (DnTerm var) (DnTerm var)
+  | DnWRec (UpTerm var) (DnTerm var)
   deriving (Eq,Show)
 
 liftTerm :: DnTerm var -> UpTerm var
-liftTerm (DnVar v)     = UpVar v
-liftTerm (DnPred s vs) = UpPred s (map liftTerm vs)
--- ## TODO: figure out if formers are liftable
-
+liftTerm (DnVar n) = UpVar n
+liftTerm (DnPred s ts) = UpPred s ts
+liftTerm (DnType typ) = typ
+-- other terms are not liftable
 
 -- | An Object of the Contextual Category: a context in type theory.
 --   A context is a list of Terms of type Type, with variables
@@ -52,7 +69,9 @@ g <.> f = comp $ Hom2C g f
 
 infixr 9 <.>
 
----- Morphisms
+-----
+-- Structural rules
+-----
 
 -- | Identity morphism.
 unit :: ObC -> HomC
@@ -65,19 +84,14 @@ unit (ObC obs) = HomC {
 -- | Composition of morphisms.
 comp :: Hom2C -> HomC
 comp (Hom2C g f) =
+    -- pre-condition
     assert (target f == source g) $
+    -- code
     HomC {
         source = source f,
         target = target g,
         morph = map (substDn $ morph f) (morph g)
     }
-
-substDn :: [DnTerm Int] -> DnTerm Int -> DnTerm Int
-substDn s (DnVar i) = s !! i
-substDn s (DnPred p vs) =
-    DnPred p (map (substDn s) vs)
-substDn s (DnLambda f) =
-    DnLambda (substDn s f)
 
 ---- Dependent projection
 ft :: ObC -> ObC
@@ -86,7 +100,9 @@ ft (ObC ob) = ObC $ tail ob
 -- | Build a canonical projection morphism out of this object.
 proj :: ObC -> HomC
 proj (ObC obs) =
+    -- pre-condition
     assert (not $ null obs) $
+    -- code
     HomC {
         source = obs,
         target = tail obs,
@@ -102,13 +118,10 @@ isSection f =
 -- | Pullback the canonical projection 'proj' from object 'x' along 'f'
 pullback :: HomC -> ObC -> ObC
 pullback f (ObC obs) =
+    -- pre-condition
     assert (tail obs == target f) $
+    -- code
     ObC $ (substUp (morph f) (head obs)) : (source f)
-
-
-substUp :: [DnTerm Int] -> UpTerm Int -> UpTerm Int
-substUp s (UpVar i) = liftTerm $ s !! i
-substUp s (UpPred p vs) = UpPred p (map (substUp s) vs)
 
 q :: HomC -> ObC -> HomC
 q f ob@(ObC obs) =
@@ -120,11 +133,26 @@ q f ob@(ObC obs) =
         morph = (DnVar 0) : (incr $ morph f)
     }
 
+-- helpers
+substUp :: [DnTerm Int] -> UpTerm Int -> UpTerm Int
+substUp s (UpVar i) = liftTerm $ s !! i
+substUp s (UpPred p vs) = UpPred p (map (substUp s) vs)
+substUp s (UpPi a b) =
+
+
+substDn :: [DnTerm Int] -> DnTerm Int -> DnTerm Int
+substDn s (DnVar i) = s !! i
+substDn s (DnPred p vs) =
+    DnPred p (map (substDn s) vs)
+substDn s (DnLambda f) =
+    DnLambda (substDn s f) -- WRONG !!!
+
 incr :: [DnTerm Int] -> [DnTerm Int]
 incr = offset 1
 
 offset :: Int -> [DnTerm Int] -> [DnTerm Int]
 offset n = map $ fmap (+ n)
+
 {-# INLINE[2] offset #-}
 {-# RULES
     "offset/offset" forall n m ts. offset n (offset m ts) = offset (n + m) ts
@@ -149,8 +177,6 @@ lambda b =
     -- code
     let upB:upA:gamma = target b
         f:bs = morph b
-        -- ## TODO: 'eager' substitution if x has a constant head?
-        --   seems like a bad idea...
     in HomC {
         source = gamma,
         target = (UpPi upA upB) : gamma,  -- pi (target k)
@@ -158,7 +184,7 @@ lambda b =
     }
 
 -- ∏-ELIM
--- k :  [Г] -> [Г,A,B] , c : [Г] -> [Г,A]
+-- k :  [Г] -> [Г,∏(A,B)] , c : [Г] -> [Г,A]
 app :: HomC -> HomC -> HomC
 app k a =
     -- pre-conditions
@@ -171,8 +197,6 @@ app k a =
     -- code
     let (UpPi upA upB):gamma = target k
         (DnLambda f):_ = morph k
-        
-        -- ## TODO: shouldn't we unify x and x' instead?
         f' = substDn (morph a) f
     in HomC {
         source = gamma,
@@ -181,17 +205,51 @@ app k a =
     }
 
 -----
--- Judgmental Equality
+-- W-Types
 -----
 
-class EqJ a where
-    eqJ :: ObC -> a -> a -> Bool
+-- W-FORM
+w :: ObC -> ObC
+w (ObC (b:a:os)) = ObC $ (UpWType a b) : os
 
-instance EqJ (DnTerm a) where
-    eqJ gamma (DnPred s1 ts1) (DnPred s2 ts2) =
-        s1 == s2 &&
-        and (zipWith (eqJ gamma) ts1 ts2)
-    -- ## TODO: complete the inference rules
+-- W-INTRO
+-- for each object [Г,A,B]
+-- a map [Г,A,∏(B,p^*_B p^*_A W(A,B))] -> [Г,W(A,B)]
+sup :: ObC -> HomC
+sup (ObC (b:a:gamma)) =
+    let ppw = UpWType a b  -- ## TODO: should be a pullback of p^*_A, P^*_B
+    in HomC {
+        source = (UpPi b ppw):a:gamma,
+        target = (UpWType a b):gamma,
+        morph  = (DnSup (DnVar 1) (DnVar 0)):(offset 2 $ morph $ unit (ObC gamma))
+    }
+
+-- W-ELIM
+-- for each map 'd', a map 'wrec' such that
+--   wrec . sup = d . λ(wrec . app(...))
+wrec :: HomC -> HomC
+wrec d =
+    let 
+    in HomC {
+        source = tail $ target d,
+        target = target d,
+        morph  = []
+    }
+
+
+-----
+-- Validation
+-----
+
+-- | Check that the given object is valid in the given environment containing
+--   bindings for named values.
+-- validOb  :: Env -> ObC -> Bool
+
+
+-- | Check that the given morphism is valid in the given environment containing
+--   bindings for named values.
+-- validHom :: Env -> HomC -> Bool
+
 
 -----
 -- Instances

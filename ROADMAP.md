@@ -42,8 +42,9 @@ Rhodium has a Dependant Type System, where types can depend on both other types 
 #### TODO
 - [x] objects, morphisms, composition in Contextual Categories
 - [x] projections, pullbacks
-- [x] dependant function
-- [ ] dependant pair, one, zero, sum types
+- [x] dependant function, dependant pair
+- [ ] W-types
+- [ ] one, zero, sum types
 - [ ] judgemental equality
 - [ ] a `Check` monad, validating all objects at injection
 - [ ] type-check from source language
