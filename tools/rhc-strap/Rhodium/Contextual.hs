@@ -5,6 +5,7 @@
 module Rhodium.Contextual where
 
 import Control.Exception.Base (assert)
+import Data.Bool (Bool)
 import Data.Eq (Eq(..))
 import Data.Functor (Functor(..))
 import Data.Int (Int)
@@ -117,6 +118,10 @@ qullback f ob@(ObC obs) =
 -----
 -- Helper functions
 -----
+
+isSection :: HomC -> Bool
+isSection m =
+	source m == tail (target m)
 
 substType :: Terms Int -> Type Int -> Type Int
 substType trms (TyVar n) =
