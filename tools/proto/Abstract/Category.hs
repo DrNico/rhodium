@@ -1,5 +1,5 @@
 {-# LANGUAGE
-    TypeFamilies
+    TypeFamilies, MultiParamTypeClasses, FlexibleInstances
   #-}
 
 module Abstract.Category where
@@ -62,12 +62,23 @@ newtype Ap2 f g a b = Ap2 {
     unAp2 :: f (g a b)
 }
 
+-----
+-- Functor between Categories
+-----
 
---class (Category homC obC, Category homD obD) => Functor homC obC homD obD where
---  omap    :: obC a -> obD a
---  fmap    :: homC a b -> homD a b
+class Functor c d where
+    type OMap c d a :: *
+    type FMap c d a b :: *
 
---instance (Category homC obC) => Functor homC obC (Ap2 [] homC) (Ap1 [] obC) where
---  --omap x = [x]
---  --fmap _ [] = []
---  
+    omap  :: (Category c, Category d)
+          => (Ob c) a -> OMap c d a
+    mmap  :: (Category c, Category d)
+          => c a b -> FMap c d a b
+
+instance (Category cat, Applicative f) => Functor cat (Ap2 f cat) where
+    type OMap cat (Ap2 f cat) a = Ap1 f (Ob cat) a
+    type FMap cat (Ap2 f cat) a b = Ap2 f cat a b
+
+    omap x = Ap1 (pure x)
+    mmap f = Ap2 (pure f)
+
