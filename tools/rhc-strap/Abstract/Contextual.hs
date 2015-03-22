@@ -40,14 +40,3 @@ class Contextual cat => PiStructure cat where
                     -> Hom cat g (g, Pi cat a b)
     app             :: Hom 
 -}
-
-{-
-instance Category DependantType where
-    type Ob Type  = Types
-    type Hom Type = Terms
-
-    source (Terms s _ _) = s
-    target (Terms _ t _) = t
-
-data DependantType
--}

@@ -1,5 +1,5 @@
 {-# LANGUAGE
-    GADTs, TypeFamilies
+    GADTs, TypeFamilies, RankNTypes
   #-}
 
 {-|
@@ -16,7 +16,9 @@ import Abstract.Category (Category(..))
 import Abstract.Contextual (Contextual(..))
 import Data.ListN
 
-import Prelude (Eq(..), Int, undefined)
+import Data.Functor (Functor(..))
+
+import Prelude (Eq(..), Int, (+))
 
 
 data Type var where
@@ -46,15 +48,19 @@ instance Category Map where
 
     id (Obj ob) = Map {
             context = ob,
-            terms = undefined,
+            terms = go 0 ob,
             types = ob
         }
+        where
+            go :: forall n. Int -> ListN n (Type Int) -> ListN n (Term Int)
+            go _ Nil = Nil
+            go n (Cons _ r) = Cons (TmVar n) (go (n + 1) r)
 
     g . f =
         Map {
             context = context f,
-            terms = undefined,
-            types = types g
+            terms = fmap (substTerm (terms f)) (terms g),
+            types = fmap (substType (terms f)) (types g)
         }
 
 instance Contextual Obj where
@@ -68,5 +74,24 @@ instance Contextual Obj where
 
     proj t = (id (ft t)) { context = obj t }
 
-    pullback = undefined
+    pullback (Obj o) f =
+        Map {
+            context = snoc (context f) (head o),
+            terms = snoc (terms f) (TmVar (length o)),
+            types = snoc (types f) (head o)
+        }
+
+
+-----
+-- Helper functions
+-----
+
+substTerm :: ListN n (Term Int) -> Term Int -> Term Int
+substTerm ts (TmVar n) = ts !! n
+
+substType :: ListN n (Term Int) -> Type Int -> Type Int
+substType ts (TyVar n) = liftTerm (ts !! n)
+
+liftTerm :: Term Int -> Type Int
+liftTerm (TmVar n) = TyVar n
 

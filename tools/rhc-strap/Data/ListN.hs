@@ -18,19 +18,48 @@ import Data.Functor (Functor(..))
 import Data.Foldable (Foldable(..))
 import Data.Monoid (Monoid(..))
 
-import Prelude ((.), Eq(..), Bool(..), (&&), Int, (+))
+import Prelude ((.), Eq(..), Bool(..), (&&), Int, (+), (-), (<), otherwise, error)
 
 data ListN n a where
     Nil             :: ListN Zero a
     Cons            :: a -> ListN n a -> ListN (Succ n) a
 
+head :: ListN (Succ n) a -> a
+head (Cons x _) = x
+
 init :: ListN (Succ n) a -> ListN n a
-init (Cons x Nil) = Nil
-init (Cons x (Cons y ys)) = Cons x (init (Cons y ys))
+init (Cons (x :: a) r) = go x r
+    where
+    go :: forall n. a -> ListN n a -> ListN n a
+    go x Nil = Nil
+    go x (Cons y r) = Cons x (go y r)
 
 length :: ListN n a -> Int
 length = foldl' (+) 0 . ((<$) 1)
 
+(!!) :: ListN n a -> Int -> a
+(xs :: ListN n a) !! n
+    | n < 0 = error "ListN.!!: negative index\n"
+    | otherwise = go n xs
+        where
+            go :: forall n. Int -> ListN n a -> a
+            go _ Nil = error "ListN.!!: index too large\n"
+            go 0 (Cons x _) = x
+            go n (Cons _ r) = go (n - 1) r
+
+snoc :: ListN n a -> a -> ListN (Succ n) a
+snoc r (x :: a) = go x r
+    where
+    go :: forall n. a -> ListN n a -> ListN (Succ n) a
+    go x Nil = Cons x Nil
+    go x (Cons y r) = Cons y (go x r)
+
+zipWith :: (a -> b -> c) -> ListN n a -> ListN n b -> ListN n c
+zipWith (f :: a -> b -> c) = go
+    where
+    go :: forall n. ListN n a -> ListN n b -> ListN n c
+    go Nil Nil = Nil
+    go (Cons x r) (Cons y s) = Cons (f x y) (go r s)
 
 instance Eq a => Eq (ListN n a) where
     Nil == Nil              = True
@@ -81,3 +110,6 @@ instance Foldable (ListN n) where
         go x Nil = x
         go x (Cons y ys) = let !z = f x y in go z ys
 
+{-  TODO: rewrite rules
+    "init/snoc" forall list x. init (snoc list x) = list
+  -}
