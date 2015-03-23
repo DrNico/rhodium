@@ -2,14 +2,22 @@
     TypeFamilies, MultiParamTypeClasses, FlexibleInstances
   #-}
 
+{-|
+Module          : Abstract.Category
+Description     : Class of Categories, Functors and Natural Transformations
+Copyright       : (c) Nicolas Godbout, 2015
+License         : MIT
+Maintainer      : nicolas.godbout@gmail.com
+Stability       : Experimental
+-}
 module Abstract.Category where
 
-import Control.Applicative
+import Control.Applicative (Applicative(..))
 import Control.Arrow (Kleisli(..), (<<<))
-import Data.Typeable
+import Data.Typeable (Proxy(..))
 
 import qualified Prelude as Prelude
-import Prelude (($), zipWith, Monad(..), map, fmap)
+import Prelude (Monad(..), fmap)
 
 -- | Class of Categories.
 --   Instances should satisfy the following equations:
