@@ -18,9 +18,9 @@ import Data.Naturals (Zero, Succ)
 import Prelude (Int)
 
 
--- | An instance should satisfy the following equations:
---     * @grade terminal == 0@
---     * @grade (ft x) == grade x - 1@
+-- | Instances should satisfy the following equations:
+-- prop> grade terminal == 0
+-- prop> grade (ft x) == grade x - 1
 --     * pullback is functorial
 class Contextual typ where
     type Cat typ    :: * -> * -> *
@@ -32,11 +32,13 @@ class Contextual typ where
     pullback        :: typ (Succ n) -> Cat typ n m
                     -> Cat typ (Succ n) (Succ m)
 
-{-
-class Contextual cat => PiStructure cat where
-    type Pi cat a b :: *
+-- | Instances should satisfy the following equations:
+-- prop> app . section a . section (lambda (section b)) == section b . section a
+class Contextual typ => PiStructure typ where
+    -- | Transform a section (a,b) : [A, B] into a section (lambda b) : [Pi(A,B)]
+    lambda          :: Cat typ n (Succ (Succ m))
+                    -> Cat typ n (Succ m)
 
-    lambda          :: Hom cat g (g a b)
-                    -> Hom cat g (g, Pi cat a b)
-    app             :: Hom 
--}
+    -- | Transform a section (k,a) : [Pi(A,B),A] into a section (a,b) : [A,B]
+    app             :: Cat typ n (Succ (Succ m))
+                    -> Cat typ n (Succ (Succ m))

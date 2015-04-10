@@ -98,6 +98,7 @@ ft :: ObC -> ObC
 ft (ObC ob) = ObC $ tail ob
 
 -- | Build a canonical projection morphism out of this object.
+--   ## TODO: proj has a special case on 'DnApp'
 proj :: ObC -> HomC
 proj (ObC obs) =
     -- pre-condition
@@ -130,22 +131,26 @@ q f ob@(ObC obs) =
     in HomC {
         source = fstar,
         target = obs,
-        morph = (DnVar 0) : (incr $ morph f)
+        morph = (DnVar 0) : (offset 1 $ morph f)
     }
 
 -- helpers
 substUp :: [DnTerm Int] -> UpTerm Int -> UpTerm Int
-substUp s (UpVar i) = liftTerm $ s !! i
+substUp s (UpVar i) =
+    liftTerm $ s !! i
+    -- ^ ## WRONG: 'DnApp' counts for two objects
 substUp s (UpPred p vs) = UpPred p (map (substUp s) vs)
 substUp s (UpPi a b) =
 
 
 substDn :: [DnTerm Int] -> DnTerm Int -> DnTerm Int
-substDn s (DnVar i) = s !! i
+substDn s (DnVar i) =
+    s !! i
+    -- ## WRONG: 'DnApp' counts for two objects
 substDn s (DnPred p vs) =
     DnPred p (map (substDn s) vs)
 substDn s (DnLambda f) =
-    DnLambda (substDn s f) -- WRONG !!!
+    DnLambda (substDn s f) -- ## WRONG !!!
 
 incr :: [DnTerm Int] -> [DnTerm Int]
 incr = offset 1
@@ -171,22 +176,29 @@ pi (ObC (b:a:os)) = ObC $ (UpPi a b) : os
 -- lambda b : [G] -> [G,Pi(A,B)]
 lambda :: HomC -> HomC
 lambda b =
-    -- pre-conditions
-    assert (not (null $ source b)) $
-    assert (source b == tail (target b)) $
-    -- code
     let upB:upA:gamma = target b
-        f:bs = morph b
+        f:_:bs = morph b
     in HomC {
-        source = gamma,
-        target = (UpPi upA upB) : gamma,  -- pi (target k)
+        source = tail (source b),
+        target = (UpPi upA upB) : gamma,
         morph  = (DnLambda f) : bs
     }
 
 -- ∏-ELIM
+app :: HomC -> HomC
+app g =
+    -- pre-condition: a == upA
+    let a:(UpPi upA upB):gamma = target g
+        x:f:morphs = morph g
+    in HomC {
+        source = source g,
+        target = upB : upA : gamma,
+        morph  = (DnApp f x) : morphs
+    }
+
 -- k :  [Г] -> [Г,∏(A,B)] , c : [Г] -> [Г,A]
-app :: HomC -> HomC -> HomC
-app k a =
+app2 :: HomC -> HomC -> HomC
+app2 k a =
     -- pre-conditions
     assert (source k == source a) $
     assert (let (UpPi _ _):g = target k in source k == g) $
@@ -196,12 +208,12 @@ app k a =
             in upA == upA') $
     -- code
     let (UpPi upA upB):gamma = target k
-        (DnLambda f):_ = morph k
-        f' = substDn (morph a) f
+        f:_ = morph k
+        x:morphs = morph a
     in HomC {
         source = gamma,
         target = upB : upA : gamma,
-        morph  = f' : (morph a)
+        morph  = (DnApp f x) : morphs
     }
 
 -----

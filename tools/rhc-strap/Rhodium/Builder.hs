@@ -67,7 +67,7 @@ mkPi (ObC TyNil) =
 mkLambda :: HomC -> Builder (HomC)
 mkLambda b = do
     unless
-        (isSection b)
+        (isSection b) -- 'a' must be Var 0
         (throwError $ strMsg "argument of 'lambda' is not a section")
     let TyCons upB (TyCons upA gamma) = target b
     let TmCons f (TmCons x bs) = morph b

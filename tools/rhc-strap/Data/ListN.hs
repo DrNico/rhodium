@@ -20,6 +20,8 @@ import Data.Monoid (Monoid(..))
 
 import Prelude ((.), Eq(..), Bool(..), (&&), Int, (+), (-), (<), otherwise, error)
 
+{- | List carrying a type-level length information
+-}
 data ListN n a where
     Nil             :: ListN Zero a
     Cons            :: a -> ListN n a -> ListN (Succ n) a

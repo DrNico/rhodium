@@ -2,6 +2,23 @@
 	BangPatterns, TypeFamilies
   #-}
 
+{-|
+Module 			: Rhodium.Contextual
+Description     : Contextual Categories
+Copyright		: (c) Nicolas Godbout, 2015
+License			: BSD-3
+Maintainer		: nicolas.godbout@gmail.com
+Stability		: Experimental
+
+A Contextual Category is a Category with, in addition:
+	1) grade :: Ob C -> Nat
+	2) one   :: Ob C
+		such that @grade one == 0@
+	3) ft    :: Ob C -> Ob C
+		such that @(grade (ft ob) + 1 == grade ob)@
+	4) proj  :: Ob C -> Hom C
+	5) pullback :: Ob C -> Hom C -> (Ob C, Hom C)
+-}
 module Rhodium.Contextual where
 
 import Control.Exception.Base (assert)
